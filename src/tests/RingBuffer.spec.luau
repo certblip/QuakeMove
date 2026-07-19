@@ -1,0 +1,23 @@
+--!strict
+local RingBuffer = require(script.Parent.Parent.shared.MovementFramework.Networking.RingBuffer)
+
+return function(t: any)
+	t:describe("RingBuffer", function()
+		t:it("stores up to capacity then evicts oldest", function()
+			local rb = RingBuffer.new(3)
+			rb:Push(1); rb:Push(2); rb:Push(3)
+			t:expect(rb:Count()):toBe(3)
+			local evicted = rb:Push(4)
+			t:expect(evicted):toBe(1)
+			t:expect(rb:Get(1)):toBe(2)
+			t:expect(rb:Newest()):toBe(4)
+		end)
+		t:it("Get is 1-indexed oldest-first", function()
+			local rb = RingBuffer.new(4)
+			rb:Push(10); rb:Push(20)
+			t:expect(rb:Get(1)):toBe(10)
+			t:expect(rb:Get(2)):toBe(20)
+			t:expect(rb:Get(3)):toBe(nil)
+		end)
+	end)
+end

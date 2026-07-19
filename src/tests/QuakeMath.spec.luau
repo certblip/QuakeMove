@@ -1,0 +1,58 @@
+--!strict
+--[[ QuakeMath.spec.luau - verifies the id pmove math: friction floor behaviour,
+     the strafe-gain projection, and the air speed cap. ]]
+
+local QuakeMath = require(script.Parent.Parent.shared.MovementFramework.Simulation.QuakeMath)
+
+return function(t: any)
+	t:describe("QuakeMath.applyFriction", function()
+		t:it("does not touch vertical velocity", function()
+			local v = QuakeMath.applyFriction(Vector3.new(10, 25, 0), 6, 6.25, 1 / 60)
+			t:expect(v.Y):toBe(25)
+		end)
+		t:it("brings low speeds to a hard stop via stopSpeed floor", function()
+			-- speed below stopSpeed: control clamps up, drop can exceed speed => 0
+			local v = QuakeMath.applyFriction(Vector3.new(1, 0, 0), 12, 6.25, 1 / 30)
+			t:expect(v.Magnitude):toBeLessThan(1)
+		end)
+		t:it("reduces speed but preserves direction at high speed", function()
+			local v = QuakeMath.applyFriction(Vector3.new(30, 0, 0), 6, 6.25, 1 / 60)
+			t:expect(v.X):toBeLessThan(30)
+			t:expect(v.X):toBeGreaterThan(0)
+			t:expect(v.Z):toBe(0)
+		end)
+	end)
+
+	t:describe("QuakeMath.accelerate", function()
+		t:it("adds no speed when already at wishspeed along wishdir", function()
+			local wish = Vector3.new(1, 0, 0)
+			local v, accel = QuakeMath.accelerate(Vector3.new(20, 0, 0), wish, 20, 10, 1 / 60)
+			t:expect(v.X):toBeCloseTo(20, 1e-3)
+			t:expect(accel):toBe(0)
+		end)
+		t:it("fills only the gap along wishdir (perpendicular speed uncounted)", function()
+			-- moving fast sideways; wishdir forward; currentSpeed proj ~ 0 so we accelerate
+			local wish = Vector3.new(0, 0, -1)
+			local v = QuakeMath.accelerate(Vector3.new(40, 0, 0), wish, 20, 10, 1 / 60)
+			t:expect(v.Z):toBeLessThan(0) -- gained forward speed
+			t:expect(v.X):toBeCloseTo(40, 1e-3) -- sideways untouched (strafe gain)
+		end)
+	end)
+
+	t:describe("QuakeMath.airAccelerate", function()
+		t:it("clamps wishspeed to the air cap (the strafe mechanic)", function()
+			local wish = Vector3.new(0, 0, -1)
+			-- With a tiny cap, even huge wishspeed adds only cap worth of speed.
+			local v = QuakeMath.airAccelerate(Vector3.zero, wish, 20, 1.9, 40, 1 / 60)
+			t:expect(-v.Z):toBeLessThan(2.0)
+			t:expect(-v.Z):toBeGreaterThan(0)
+		end)
+	end)
+
+	t:describe("QuakeMath.clampVelocity", function()
+		t:it("caps magnitude while keeping direction", function()
+			local v = QuakeMath.clampVelocity(Vector3.new(300, 0, 0), 200)
+			t:expect(v.Magnitude):toBeCloseTo(200, 1e-3)
+		end)
+	end)
+end

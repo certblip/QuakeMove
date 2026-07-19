@@ -1,0 +1,30 @@
+{
+  "name": "QuakeMovementFramework",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "MovementFramework": {
+        "$path": "src/shared/MovementFramework"
+      }
+    },
+    "ServerScriptService": {
+      "ServerMovementService": {
+        "$path": "src/server/ServerMovementService.luau"
+      },
+      "ServerBootstrap": {
+        "$path": "src/server/ServerBootstrap.server.luau"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "InputService":        { "$path": "src/client/InputService.luau" },
+        "CameraService":       { "$path": "src/client/CameraService.luau" },
+        "CharacterAdapter":    { "$path": "src/client/CharacterAdapter.luau" },
+        "DebugOverlay":        { "$path": "src/client/DebugOverlay.luau" },
+        "MovementController":  { "$path": "src/client/MovementController.luau" },
+        "CameraEffects":       { "$path": "src/client/CameraEffects" },
+        "ClientBootstrap":     { "$path": "src/client/ClientBootstrap.client.luau" }
+      }
+    }
+  }
+}
