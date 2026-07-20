@@ -4,7 +4,11 @@ A deterministic Quake/Source-inspired movement framework for Roblox.
 
 Designed as a reusable locomotion engine rather than a collection of movement scripts, the project focuses on deterministic simulation, client prediction with full server reconciliation, and a modular architecture suitable for competitive FPS games.
 
+<<<<<<< HEAD
+![Luau](https://img.shields.io/badge/Language-Luau%20(strict)-blue) ![Roblox](https://img.shields.io/badge/Platform-Roblox-red) ![License](https://img.shields.io/badge/License-MIT-green) ![Status](https://img.shields.io/badge/Status-Beta-yellow) ![Architecture](https://img.shields.io/badge/Architecture-Deterministic-success) ![Prediction](https://img.shields.io/badge/Networking-Reconciliation-blueviolet) ![Tests](https://img.shields.io/badge/Tests-51%20passing-success)
+=======
 ![Luau](https://img.shields.io/badge/Language-Luau%20(strict)-blue) ![Roblox](https://img.shields.io/badge/Platform-Roblox-red) ![License](https://img.shields.io/badge/License-MIT-green) ![Status](https://img.shields.io/badge/Status-Beta-yellow) ![Architecture](https://img.shields.io/badge/Architecture-Deterministic-success) ![Prediction](https://img.shields.io/badge/Networking-Reconciliation-blueviolet) ![Tests](https://img.shields.io/badge/Tests-36%20passing-success)
+>>>>>>> 66fae2ad70fcb47cb29e639fa94048af32115bc4
 
 ---
 
@@ -13,6 +17,10 @@ Designed as a reusable locomotion engine rather than a collection of movement sc
 - Fixed timestep simulation (60 Hz), fully decoupled from rendering
 - Client-side prediction + rollback + input replay + correction smoothing
 - Authoritative server with input queueing and anti-cheat validation
+<<<<<<< HEAD
+- Lag compensation: server-side rewind (backtracking) for fair hit registration
+=======
+>>>>>>> 66fae2ad70fcb47cb29e639fa94048af32115bc4
 - Three air-physics modes: **Quake** (Q3 pmove), **Source** (HL2 gamemovement), **CPM** (ProMode air control)
 - Surf physics and Source-style ramp boosting
 - Bunny hopping, air strafing, slide (exploit-capped), step movement
@@ -65,14 +73,23 @@ src/
     Config/       MovementConfig, CameraConfig, InputConfig, NetworkConfig
     Simulation/   Simulator, QuakeMath, AirPhysics, SlideMove, GroundTracer,
                   WallRun, LadderMove, Collision, MoveState, StateMachine
+<<<<<<< HEAD
+    Networking/   InputCommand, PredictionBuffer, RingBuffer, Replay, Transport,
+                  LagCompensation
+=======
     Networking/   InputCommand, PredictionBuffer, RingBuffer, Replay, Transport
+>>>>>>> 66fae2ad70fcb47cb29e639fa94048af32115bc4
     Modifiers/    JumpPad, SpeedZone
   client/         MovementController, InputService, CameraService, CameraEffects/,
                   CharacterAdapter, ViewmodelService, HUDService, ReplayService,
                   DebugRenderer, DebugOverlay, ClientBootstrap
   server/         ServerMovementService, ServerBootstrap
   assets/         QuakeHUD.rbxmx, ReplayHUD.rbxmx, Viewmodel.rbxmx
+<<<<<<< HEAD
+  tests/          TestRunner + 51 specs (engine-free)
+=======
   tests/          TestRunner + 36 specs (engine-free)
+>>>>>>> 66fae2ad70fcb47cb29e639fa94048af32115bc4
 lune/             run-tests.luau (CI runner, no Roblox required)
 ```
 
@@ -144,6 +161,10 @@ local fw = Framework.create({ MovementProfile = Framework.MovementConfig.CPM })
 | Ladders | ✅ |
 | Client Prediction | ✅ |
 | Server Reconciliation | ✅ |
+<<<<<<< HEAD
+| Lag Compensation (rewind hitscan) | ✅ |
+=======
+>>>>>>> 66fae2ad70fcb47cb29e639fa94048af32115bc4
 | Replay System | ✅ |
 | Debug Visualization | ✅ |
 | Movement Profiles | ✅ |
@@ -166,11 +187,27 @@ stream — playback re-simulates and lands on the same result bit-for-bit.
 Server-side validation: NaN/Inf rejection, tick monotonicity, server-dictated
 timestep (no time-dilation exploits), bounded per-tick command drain.
 
+<<<<<<< HEAD
+Lag compensation: the server records every player's authoritative pose each
+tick (crouch-aware ring buffer) and measures RTT itself via a clock echo in
+the input header — a client-reported ping would be a cheat vector. A weapon
+system calls `ServerMovementService:RewindRaycast(shooter, origin, dir, dist)`;
+the service rewinds every other player to the tick the shooter actually saw
+(interp delay + half RTT, capped at `MaxRewindSeconds`) and intersects the ray
+with the pose-correct hull, so hits land where targets were rendered on the
+shooter's screen.
+
+=======
+>>>>>>> 66fae2ad70fcb47cb29e639fa94048af32115bc4
 ---
 
 ## Testing
 
+<<<<<<< HEAD
+51 specs cover the math, wire formats, lag compensation, the simulator (jump edge buffering,
+=======
 36 specs cover the math, wire formats, the simulator (jump edge buffering,
+>>>>>>> 66fae2ad70fcb47cb29e639fa94048af32115bc4
 slide cap, all three air-physics modes, wall runs) and replay determinism.
 
 ```bash
