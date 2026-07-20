@@ -16,11 +16,17 @@ local Transport = {}
 local REMOTE_FOLDER = "MovementFrameworkRemotes"
 local INPUT_REMOTE = "MovementInput"
 local SNAPSHOT_REMOTE = "MovementSnapshot"
+-- Down-only: the authoritative pose of EVERY player, for remote-player entity
+-- interpolation. Separate from the per-client SNAPSHOT (which is reconciliation
+-- data the receiver acts on) - this is purely spectatorial position data.
+local BROADCAST_REMOTE = "MovementBroadcast"
 
 type RemoteInternal = Types.ITransport & {
 	_input: UnreliableRemoteEvent,
 	_snapshot: UnreliableRemoteEvent,
+	_broadcast: UnreliableRemoteEvent,
 	_conn: RBXScriptConnection?,
+	_broadcastConn: RBXScriptConnection?,
 	_isServer: boolean,
 	_player: Player?,
 }
@@ -49,10 +55,26 @@ function RemoteTransport.OnSnapshot(self: RemoteInternal, handler: (packet: buff
 	end)
 end
 
+function RemoteTransport.OnBroadcast(self: RemoteInternal, handler: (packet: buffer) -> ())
+	if self._isServer then
+		return
+	end
+	if self._broadcastConn then
+		self._broadcastConn:Disconnect()
+	end
+	self._broadcastConn = self._broadcast.OnClientEvent:Connect(function(packet: buffer)
+		handler(packet)
+	end)
+end
+
 function RemoteTransport.Destroy(self: RemoteInternal)
 	if self._conn then
 		self._conn:Disconnect()
 		self._conn = nil
+	end
+	if self._broadcastConn then
+		self._broadcastConn:Disconnect()
+		self._broadcastConn = nil
 	end
 end
 
@@ -60,12 +82,14 @@ end
 export type ServerTransport = {
 	OnInput: (self: ServerTransport, handler: (player: Player, packet: buffer) -> ()) -> (),
 	SendSnapshot: (self: ServerTransport, player: Player, packet: buffer) -> (),
+	Broadcast: (self: ServerTransport, packet: buffer) -> (),
 	Destroy: (self: ServerTransport) -> (),
 }
 
 type ServerInternal = ServerTransport & {
 	_input: UnreliableRemoteEvent,
 	_snapshot: UnreliableRemoteEvent,
+	_broadcast: UnreliableRemoteEvent,
 	_conn: RBXScriptConnection?,
 }
 
@@ -84,6 +108,10 @@ function ServerTransportImpl.SendSnapshot(self: ServerInternal, player: Player, 
 	self._snapshot:FireClient(player, packet)
 end
 
+function ServerTransportImpl.Broadcast(self: ServerInternal, packet: buffer)
+	self._broadcast:FireAllClients(packet)
+end
+
 function ServerTransportImpl.Destroy(self: ServerInternal)
 	if self._conn then
 		self._conn:Disconnect()
@@ -91,7 +119,9 @@ function ServerTransportImpl.Destroy(self: ServerInternal)
 	end
 end
 
-local function getRemotes(create: boolean): (UnreliableRemoteEvent, UnreliableRemoteEvent)
+local function getRemotes(
+	create: boolean
+): (UnreliableRemoteEvent, UnreliableRemoteEvent, UnreliableRemoteEvent)
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 	local folder: Instance
 	if create then
@@ -107,6 +137,9 @@ local function getRemotes(create: boolean): (UnreliableRemoteEvent, UnreliableRe
 			local snapshot = Instance.new("UnreliableRemoteEvent")
 			snapshot.Name = SNAPSHOT_REMOTE
 			snapshot.Parent = f
+			local broadcast = Instance.new("UnreliableRemoteEvent")
+			broadcast.Name = BROADCAST_REMOTE
+			broadcast.Parent = f
 			f.Parent = ReplicatedStorage
 			folder = f
 		else
@@ -118,23 +151,26 @@ local function getRemotes(create: boolean): (UnreliableRemoteEvent, UnreliableRe
 		folder = ReplicatedStorage:WaitForChild(REMOTE_FOLDER)
 	end
 	return folder:WaitForChild(INPUT_REMOTE) :: UnreliableRemoteEvent,
-		folder:WaitForChild(SNAPSHOT_REMOTE) :: UnreliableRemoteEvent
+		folder:WaitForChild(SNAPSHOT_REMOTE) :: UnreliableRemoteEvent,
+		folder:WaitForChild(BROADCAST_REMOTE) :: UnreliableRemoteEvent
 end
 
 function Transport.newClient(): Types.ITransport
-	local input, snapshot = getRemotes(false)
+	local input, snapshot, broadcast = getRemotes(false)
 	return setmetatable({
 		_input = input,
 		_snapshot = snapshot,
+		_broadcast = broadcast,
 		_isServer = false,
 	}, RemoteTransport) :: any
 end
 
 function Transport.newServer(): ServerTransport
-	local input, snapshot = getRemotes(true)
+	local input, snapshot, broadcast = getRemotes(true)
 	return setmetatable({
 		_input = input,
 		_snapshot = snapshot,
+		_broadcast = broadcast,
 	}, ServerTransportImpl) :: any
 end
 
@@ -143,6 +179,7 @@ local NullTransport = {}
 NullTransport.__index = NullTransport
 function NullTransport.SendInput(_self: Types.ITransport, _packet: buffer) end
 function NullTransport.OnSnapshot(_self: Types.ITransport, _handler: (packet: buffer) -> ()) end
+function NullTransport.OnBroadcast(_self: Types.ITransport, _handler: (packet: buffer) -> ()) end
 function NullTransport.Destroy(_self: Types.ITransport) end
 
 function Transport.newNull(): Types.ITransport

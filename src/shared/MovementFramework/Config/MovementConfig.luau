@@ -5,8 +5,8 @@
 	profiles. Implementation code never contains magic numbers.
 	Notes: Units are studs and seconds. Values are tuned so 16 studs ~ 1 Quake unit
 	scale feels correct at Roblox character proportions.
-	Extension: Add new profiles by table-merging over Default; the framework accepts
-	any table matching MovementProfile.
+	Extension: Add new profiles by table-cloning Default; the framework accepts
+	any table matching MovementProfile. Use the SAME profile on client and server.
 ]]
 
 -- Air acceleration strategy. "Quake" = Q3 pmove, "Source" = HL2 gamemovement
@@ -44,7 +44,7 @@ export type MovementProfile = {
 	-- Ramps / surf / slopes
 	SlopeLimit: number, -- degrees; steeper than this = surf surface
 	SurfFriction: number, -- friction applied while surfing (0 = pure Quake surf)
-	RampBoostThreshold: number, -- min upward speed to skip ground snap (ramp launch)
+	RampBoostThreshold: number, -- min separation speed to skip ground snap
 	GroundSnapDistance: number,
 	StepHeight: number,
 
@@ -54,6 +54,12 @@ export type MovementProfile = {
 	SlideFriction: number,
 	SlideMinSpeed: number, -- slide ends below this speed
 	SlideMaxTime: number,
+
+	-- Crouch stance (Source-style duck; shares the Slide key)
+	CrouchEnabled: boolean,
+	CrouchColliderHeight: number, -- collider Y while crouched (< ColliderSize.Y)
+	CrouchEyeHeight: number, -- eye offset above the crouched box centre
+	CrouchSpeedMultiplier: number, -- ground wishspeed scale while crouched
 
 	-- Limits & solver
 	MaxVelocity: number,
@@ -118,6 +124,11 @@ local Default: MovementProfile = {
 	SlideFriction = 1.2,
 	SlideMinSpeed = 8,
 	SlideMaxTime = 1.1,
+
+	CrouchEnabled = true,
+	CrouchColliderHeight = 3.0, -- vs 5.0 standing: clears low gaps when ducked
+	CrouchEyeHeight = 1.15,
+	CrouchSpeedMultiplier = 0.55,
 
 	MaxVelocity = 200,
 	Overbounce = 1.001,

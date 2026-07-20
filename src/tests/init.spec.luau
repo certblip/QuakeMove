@@ -14,6 +14,9 @@ local specs = {
 	require(script.Parent:WaitForChild("AirPhysics.spec")),
 	require(script.Parent:WaitForChild("Simulator.spec")),
 	require(script.Parent:WaitForChild("WallRun.spec")),
+	require(script.Parent:WaitForChild("Crouch.spec")),
+	require(script.Parent:WaitForChild("InputPacket.spec")),
+	require(script.Parent:WaitForChild("LagCompensation.spec")),
 	require(script.Parent:WaitForChild("Replay.spec")),
 }
 

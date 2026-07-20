@@ -17,6 +17,7 @@ return function(t: any)
 			src.grounded = true
 			src.jumpHeldPrev = true
 			src.onLadder = true
+			src.crouching = true
 			src.stateId = Types.MoveStates.Ladder
 			src.groundNormal = Vector3.new(0, 1, 0)
 			src.coyoteTimer = 0.05
@@ -39,6 +40,7 @@ return function(t: any)
 			t:expect(dst.grounded):toBeTrue()
 			t:expect(dst.jumpHeldPrev):toBeTrue()
 			t:expect(dst.onLadder):toBeTrue()
+			t:expect(dst.crouching):toBeTrue()
 			t:expect(dst.stateId):toBe(Types.MoveStates.Ladder)
 			t:expect(dst.coyoteTimer):toBeCloseTo(0.05, 1e-4)
 			t:expect(dst.jumpBufferTimer):toBeCloseTo(0.12, 1e-4)

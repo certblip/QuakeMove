@@ -10,7 +10,7 @@
 	  0  u32 tick
 	  4  3xf32 position          16 3xf32 velocity
 	  28 u8 flags [0x80 grounded, 0x40 jumpHeldPrev, 0x20 onLadder,
-	              low 5 bits stateId]
+	              0x10 crouching, low 4 bits stateId]
 	  29 3xf32 groundNormal
 	  41 f32 coyote  45 f32 jumpBuffer  49 f32 landing  53 f32 slide
 	  57 f32 wallRunTimer  61 i8 wallRunSide  62 3xf32 wallNormal
@@ -41,6 +41,7 @@ function MoveState.new(position: Vector3): Types.MoveState
 		wallNormal = Vector3.yAxis,
 		onLadder = false,
 		ladderNormal = Vector3.yAxis,
+		crouching = false,
 		jumpedThisTick = false,
 		landedThisTick = false,
 		landingSpeed = 0,
@@ -70,6 +71,7 @@ function MoveState.copyInto(dst: Types.MoveState, src: Types.MoveState)
 	dst.wallNormal = src.wallNormal
 	dst.onLadder = src.onLadder
 	dst.ladderNormal = src.ladderNormal
+	dst.crouching = src.crouching
 	dst.jumpedThisTick = src.jumpedThisTick
 	dst.landedThisTick = src.landedThisTick
 	dst.landingSpeed = src.landingSpeed
@@ -98,6 +100,9 @@ function MoveState.serialize(state: Types.MoveState, buf: buffer, offset: number
 	end
 	if state.onLadder then
 		flags += 0x20
+	end
+	if state.crouching then
+		flags += 0x10
 	end
 	buffer.writeu8(buf, offset + 28, flags)
 	buffer.writef32(buf, offset + 29, state.groundNormal.X)
@@ -133,7 +138,8 @@ function MoveState.deserialize(state: Types.MoveState, buf: buffer, offset: numb
 	state.grounded = bit32.band(flags, 0x80) ~= 0
 	state.jumpHeldPrev = bit32.band(flags, 0x40) ~= 0
 	state.onLadder = bit32.band(flags, 0x20) ~= 0
-	state.stateId = bit32.band(flags, 0x1F)
+	state.crouching = bit32.band(flags, 0x10) ~= 0
+	state.stateId = bit32.band(flags, 0x0F)
 	state.groundNormal = Vector3.new(
 		buffer.readf32(buf, offset + 29),
 		buffer.readf32(buf, offset + 33),

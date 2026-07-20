@@ -15,6 +15,29 @@ local InputCommand = {}
 
 InputCommand.WIRE_BYTES = 23
 
+-- Redundant-input packet framing: [u8 count][u32 serverStampEcho]
+-- [InputCommand * count], ordered oldest -> newest. Shipping the last N
+-- commands every tick means a dropped datagram no longer drops a simulation
+-- tick: the next packet re-delivers the missing command(s), and the server's
+-- monotonic tick gate discards the duplicates for free.
+-- serverStampEcho returns the newest server-time stamp received in a snapshot
+-- tail, giving the SERVER an authoritative per-player RTT for lag-compensated
+-- rewind (never trust a client-reported latency).
+-- Both peers derive offsets from here so the layout can never drift.
+InputCommand.PACKET_HEADER_BYTES = 5
+
+-- Snapshot tail (transport metadata appended after MoveState.SNAPSHOT_BYTES):
+-- [u32 clientStampEcho][u32 serverStampMs].
+InputCommand.SNAPSHOT_TAIL_BYTES = 8
+
+function InputCommand.packetSize(count: number): number
+	return InputCommand.PACKET_HEADER_BYTES + count * InputCommand.WIRE_BYTES
+end
+
+function InputCommand.commandOffset(index: number): number
+	return InputCommand.PACKET_HEADER_BYTES + (index - 1) * InputCommand.WIRE_BYTES
+end
+
 function InputCommand.new(): Types.InputCommand
 	return {
 		tick = 0,

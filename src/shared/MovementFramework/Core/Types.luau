@@ -21,10 +21,11 @@ local MoveStates = table.freeze({
 	Sliding = 7,
 	Surfing = 8,
 	Ramp = 9,
-	-- Appended (never reorder: ids replicate). Ids must stay <= 31: the
-	-- snapshot packs stateId into the low 5 bits of the flags byte.
+	-- Appended (never reorder: ids replicate). Ids must stay <= 15: the
+	-- snapshot packs stateId into the low 4 bits of the flags byte.
 	WallRunning = 10,
 	Ladder = 11,
+	Crouching = 12,
 })
 
 -- Bit flags packed into InputCommand.buttons.
@@ -80,6 +81,13 @@ export type MoveState = {
 	onLadder: boolean,
 	ladderNormal: Vector3,
 
+	-- Crouch stance (Source-style duck). The Slide button doubles as crouch
+	-- intent below slide speed. The collider shrinks from the TOP (feet stay
+	-- planted) and standing up is blocked while a ceiling overlaps the full
+	-- hull. Replicated via snapshot flag 0x10: the collider height depends on
+	-- it, so rollback replay MUST restore the stance.
+	crouching: boolean,
+
 	-- bookkeeping for effects / debug (written by sim, read-only elsewhere)
 	jumpedThisTick: boolean,
 	landedThisTick: boolean,
@@ -105,7 +113,10 @@ export type TraceResult = {
 	ladder: boolean,
 }
 
-export type TraceFn = (origin: Vector3, delta: Vector3) -> TraceResult
+-- The optional third argument selects the crouched hull (collider shrunk from
+-- the top). The simulator binds it internally; solver modules keep calling
+-- trace(origin, delta) and the bound flag rides along.
+export type TraceFn = (origin: Vector3, delta: Vector3, crouched: boolean?) -> TraceResult
 
 -- Camera effect contract. Effects contribute additive offsets which the
 -- pipeline composes; no effect ever writes to the camera directly.
@@ -133,6 +144,8 @@ export type ICameraEffect = {
 export type ITransport = {
 	SendInput: (self: ITransport, packet: buffer) -> (),
 	OnSnapshot: (self: ITransport, handler: (packet: buffer) -> ()) -> (),
+	-- Down-only stream of every player's pose (remote-player interpolation).
+	OnBroadcast: (self: ITransport, handler: (packet: buffer) -> ()) -> (),
 	Destroy: (self: ITransport) -> (),
 }
 

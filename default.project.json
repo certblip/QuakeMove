@@ -5,7 +5,16 @@
     "ReplicatedStorage": {
       "MovementFramework": {
         "$path": "src/shared/MovementFramework"
-      }
+      },
+      "QuakeAssets": {
+        "$className": "Folder",
+        "Viewmodel": { "$path": "src/assets/Viewmodel.rbxmx" }
+      },
+      "QuakeTests": { "$path": "src/tests" }
+    },
+    "StarterGui": {
+      "QuakeHUD": { "$path": "src/assets/QuakeHUD.rbxmx" },
+      "ReplayHUD": { "$path": "src/assets/ReplayHUD.rbxmx" }
     },
     "ServerScriptService": {
       "ServerMovementService": {
@@ -22,6 +31,12 @@
         "CharacterAdapter":    { "$path": "src/client/CharacterAdapter.luau" },
         "DebugOverlay":        { "$path": "src/client/DebugOverlay.luau" },
         "MovementController":  { "$path": "src/client/MovementController.luau" },
+        "ViewmodelService":    { "$path": "src/client/ViewmodelService.luau" },
+        "HUDService":          { "$path": "src/client/HUDService.luau" },
+        "DebugRenderer":       { "$path": "src/client/DebugRenderer.luau" },
+        "ReplayService":       { "$path": "src/client/ReplayService.luau" },
+        "RemotePlayersService": { "$path": "src/client/RemotePlayersService.luau" },
+        "ReplayDiagnostics":   { "$path": "src/client/ReplayDiagnostics.client.luau" },
         "CameraEffects":       { "$path": "src/client/CameraEffects" },
         "ClientBootstrap":     { "$path": "src/client/ClientBootstrap.client.luau" }
       }

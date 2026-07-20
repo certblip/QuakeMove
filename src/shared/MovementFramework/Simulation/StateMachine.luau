@@ -3,7 +3,7 @@
 	StateMachine.luau
 	Purpose: Deterministic movement state classification. The state is a pure
 	function of MoveState + profile: same inputs => same state on every machine,
-	which is mandatory for prediction (states replicate as a single byte).
+	which is mandatory for prediction (states replicate as part of the flags byte).
 	Architecture notes: States do not own behaviour - the simulator owns physics;
 	the state machine exists for animation, camera and gameplay consumers. This
 	keeps physics unconditionally continuous (no per-state duplicated math).
@@ -29,6 +29,7 @@ local STATE_NAMES: { [number]: string } = {
 	[MoveStates.Ramp] = "Ramp",
 	[MoveStates.WallRunning] = "WallRunning",
 	[MoveStates.Ladder] = "Ladder",
+	[MoveStates.Crouching] = "Crouching",
 }
 
 function StateMachine.name(id: Types.MoveStateId): string
@@ -68,6 +69,9 @@ function StateMachine.evaluate(
 	end
 	if state.landingTimer > 0 then
 		return MoveStates.Landing
+	end
+	if state.crouching then
+		return MoveStates.Crouching
 	end
 	if state.surfaceAngle > 12 and VectorMath.horizontalLength(state.velocity) > profile.GroundSpeed * 1.05 then
 		return MoveStates.Ramp

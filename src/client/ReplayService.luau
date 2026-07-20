@@ -278,6 +278,21 @@ function ReplayService.Start(self: ServiceInternal)
 	local player = Players.LocalPlayer
 	local playerGui = player:WaitForChild("PlayerGui")
 
+	-- Self-heal: a stale place file can contain DUPLICATE ReplayHUDs (saved
+	-- during an old Rojo session). The extra copy draws on top of the bound
+	-- one and swallows every click, so keep the first and disable the rest.
+	local seen = false
+	for _, child in playerGui:GetChildren() do
+		if child.Name == "ReplayHUD" and child:IsA("ScreenGui") then
+			if seen then
+				child.Enabled = false
+				warn("[ReplayService] duplicate ReplayHUD disabled - clean your place file (delete extras in StarterGui, save)")
+			else
+				seen = true
+			end
+		end
+	end
+
 	-- StarterGui clones into PlayerGui on first spawn; bind lazily, never yield.
 	local existing = playerGui:FindFirstChild("ReplayHUD")
 	if existing and existing:IsA("ScreenGui") then

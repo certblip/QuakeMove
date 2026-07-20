@@ -41,6 +41,8 @@ type CollisionInternal = CollisionWorld & {
 	_params: RaycastParams,
 	_result: Types.TraceResult,
 	_halfY: number,
+	_crouchSize: Vector3, -- pre-computed crouched hull dimensions
+	_crouchDrop: number, -- cast-centre drop so the hull shrinks from the TOP
 	_debugHook: DebugHook?,
 }
 
@@ -68,7 +70,12 @@ function Collision.SetIgnoreCharacter(self: CollisionInternal, character: Model?
 	end
 end
 
-local function traceImpl(self: CollisionInternal, origin: Vector3, delta: Vector3): Types.TraceResult
+local function traceImpl(
+	self: CollisionInternal,
+	origin: Vector3,
+	delta: Vector3,
+	crouched: boolean?
+): Types.TraceResult
 	local result = self._result
 	local dist = delta.Magnitude
 	result.instance = nil
@@ -83,15 +90,25 @@ local function traceImpl(self: CollisionInternal, origin: Vector3, delta: Vector
 		return result
 	end
 
+	-- The crouched hull shrinks from the TOP: `origin` stays the centre of the
+	-- STANDING box (feet level never changes), while the actual cast uses a
+	-- shorter box whose centre sits _crouchDrop lower. Results stay expressed
+	-- in origin space, so no other module knows the hull changed.
+	local size = self.Size
+	local castOrigin = origin
+	if crouched then
+		size = self._crouchSize
+		castOrigin = origin - Vector3.new(0, self._crouchDrop, 0)
+	end
+
 	local dir = delta / dist
-	local cast = workspace:Blockcast(CFrame.new(origin), self.Size, delta, self._params)
+	local cast = workspace:Blockcast(CFrame.new(castOrigin), size, delta, self._params)
 	if cast == nil then
 		result.fraction = 1
 		result.hit = false
 		result.normal = Vector3.yAxis
 		result.position = origin + delta
 	else
-		-- Pull back along the sweep so the box rests SKIN off the surface.
 		local hitDist = math.max(cast.Distance - SKIN, 0)
 		result.fraction = hitDist / dist
 		result.hit = true
@@ -113,21 +130,26 @@ function Collision.SetDebugHook(self: CollisionInternal, hook: DebugHook?)
 	self._debugHook = hook
 end
 
-local function new(size: Vector3): CollisionWorld
+local function new(size: Vector3, crouchScale: number?): CollisionWorld
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.IgnoreWater = true
 	params.RespectCanCollide = true
+
+	local scale = math.clamp(crouchScale or 0.55, 0.2, 1)
+	local crouchY = size.Y * scale
 
 	local self: CollisionInternal = setmetatable({
 		Size = size,
 		_params = params,
 		_result = makeResult(),
 		_halfY = size.Y * 0.5,
+		_crouchSize = Vector3.new(size.X, crouchY, size.Z),
+		_crouchDrop = (size.Y - crouchY) * 0.5,
 	}, Collision) :: any
 
-	self.Trace = function(origin: Vector3, delta: Vector3): Types.TraceResult
-		return traceImpl(self, origin, delta)
+	self.Trace = function(origin: Vector3, delta: Vector3, crouched: boolean?): Types.TraceResult
+		return traceImpl(self, origin, delta, crouched)
 	end
 
 	return self

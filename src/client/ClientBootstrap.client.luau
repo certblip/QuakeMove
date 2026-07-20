@@ -28,6 +28,7 @@ local ViewmodelService = require(StarterPlayerScripts:WaitForChild("ViewmodelSer
 local HUDService = require(StarterPlayerScripts:WaitForChild("HUDService"))
 local DebugRenderer = require(StarterPlayerScripts:WaitForChild("DebugRenderer"))
 local ReplayService = require(StarterPlayerScripts:WaitForChild("ReplayService"))
+local RemotePlayersService = require(StarterPlayerScripts:WaitForChild("RemotePlayersService"))
 local Transport = require(ReplicatedStorage.MovementFramework.Networking.Transport)
 
 -- 1. Framework instance + chosen profiles.
@@ -53,6 +54,7 @@ local viewmodel = ViewmodelService.new(fw)
 local hud = HUDService.new(fw)
 local debugRenderer = DebugRenderer.new(fw)
 local replayService = ReplayService.new(fw)
+local remotePlayers = RemotePlayersService.new(fw)
 
 -- 4. Register (registry resolves ordering via declared Dependencies).
 fw:RegisterService(inputService)
@@ -64,6 +66,7 @@ fw:RegisterService(viewmodel)
 fw:RegisterService(hud)
 fw:RegisterService(debugRenderer)
 fw:RegisterService(replayService)
+fw:RegisterService(remotePlayers)
 
 -- 5. Go.
 fw:Start()

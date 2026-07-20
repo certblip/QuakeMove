@@ -24,7 +24,13 @@ export type DebugOverlay = {
 	Name: string,
 	Dependencies: { string }?,
 	SetVisible: (self: DebugOverlay, visible: boolean) -> (),
-	SetNetworkStats: (self: DebugOverlay, delayMs: number, predictionError: number) -> (),
+	SetNetworkStats: (
+		self: DebugOverlay,
+		delayMs: number,
+		predictionError: number,
+		snapshotsPerSec: number,
+		correctionsPerSec: number
+	) -> (),
 	SetSimTime: (self: DebugOverlay, micros: number) -> (),
 	Update: (self: DebugOverlay, state: Types.MoveState) -> (),
 	Init: (self: DebugOverlay, registry: any) -> (),
@@ -39,6 +45,8 @@ type OverlayInternal = DebugOverlay & {
 	_rows: { string },
 	_delayMs: number,
 	_predErr: number,
+	_snapsPerSec: number,
+	_corrPerSec: number,
 	_simMicros: number,
 	_frameTimes: { number },
 	_frameIndex: number,
@@ -61,9 +69,17 @@ function DebugOverlay.SetVisible(self: OverlayInternal, visible: boolean)
 	end
 end
 
-function DebugOverlay.SetNetworkStats(self: OverlayInternal, delayMs: number, predictionError: number)
+function DebugOverlay.SetNetworkStats(
+	self: OverlayInternal,
+	delayMs: number,
+	predictionError: number,
+	snapshotsPerSec: number,
+	correctionsPerSec: number
+)
 	self._delayMs = delayMs
 	self._predErr = predictionError
+	self._snapsPerSec = snapshotsPerSec
+	self._corrPerSec = correctionsPerSec
 end
 
 function DebugOverlay.SetSimTime(self: OverlayInternal, micros: number)
@@ -115,8 +131,12 @@ function DebugOverlay.Update(self: OverlayInternal, state: Types.MoveState)
 	rows[17] = string.format("TICK         %d", state.tick)
 	rows[18] = string.format("SIM TIME     %d us", self._simMicros)
 	rows[19] = string.format("FPS          %6.1f", computeFps(self))
-	rows[20] = string.format("NET DELAY    %6.1f ms", self._delayMs)
+	rows[20] = string.format("NET RTT      %6.1f ms", self._delayMs)
 	rows[21] = string.format("PRED ERROR   %7.3f", self._predErr)
+	-- Snapshots arrive per processed input tick (60/s ideal); a sustained
+	-- lower rate = upstream/downstream loss or server-side throttling.
+	rows[22] = string.format("SNAPSHOTS    %5.1f /s", self._snapsPerSec)
+	rows[23] = string.format("CORRECTIONS  %5.1f /s", self._corrPerSec)
 
 	label.Text = table.concat(rows, "\n")
 end
@@ -163,9 +183,11 @@ local function new(startVisible: boolean): DebugOverlay
 		_gui = nil,
 		_label = nil,
 		_visible = startVisible,
-		_rows = table.create(21, ""),
+		_rows = table.create(23, ""),
 		_delayMs = 0,
 		_predErr = 0,
+		_snapsPerSec = 0,
+		_corrPerSec = 0,
 		_simMicros = 0,
 		_frameTimes = frameTimes,
 		_frameIndex = 1,

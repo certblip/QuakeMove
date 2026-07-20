@@ -180,7 +180,8 @@ export type FrameworkOptions = {
 local function create(options: FrameworkOptions?): MovementFramework
 	local opts: FrameworkOptions = options or {}
 	local movementProfile = opts.MovementProfile or MovementConfig.Default
-	local collisionWorld = Collision.new(movementProfile.ColliderSize)
+	local collisionWorld =
+		Collision.new(movementProfile.ColliderSize, movementProfile.CrouchColliderHeight / movementProfile.ColliderSize.Y)
 	local simulator = Simulator.new(movementProfile, collisionWorld.Trace)
 
 	local self: FrameworkInternal = setmetatable({
