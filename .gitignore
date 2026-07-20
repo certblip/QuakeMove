@@ -1,0 +1,11 @@
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+
+.DS_Store
+Thumbs.db
+
+.vscode/settings.json
+
+*.log
