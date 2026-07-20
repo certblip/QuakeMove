@@ -9,6 +9,11 @@
 	any table matching MovementProfile.
 ]]
 
+-- Air acceleration strategy. "Quake" = Q3 pmove, "Source" = HL2 gamemovement
+-- (uncapped accel scaling - the surf-friendly asymmetry), "CPM" = Challenge
+-- ProMode (air control + strafe-only high accel).
+export type AirAccelMode = "Quake" | "Source" | "CPM"
+
 export type MovementProfile = {
 	-- Ground movement
 	GroundSpeed: number, -- target horizontal speed while walking
@@ -18,9 +23,16 @@ export type MovementProfile = {
 	StopSpeed: number, -- friction control floor (enables crisp stops)
 
 	-- Air movement
+	AirAccelMode: AirAccelMode,
 	AirAcceleration: number,
 	AirSpeedCap: number, -- wishspeed clamp for air accel; the soul of airstrafing
 	MaxAirWishSpeed: number,
+
+	-- CPM extras (only read when AirAccelMode == "CPM")
+	CPMAirControl: number, -- velocity-turning power on pure forward/back input
+	CPMAirStopAcceleration: number, -- accel multiplier when wishing against velocity
+	CPMStrafeAcceleration: number, -- accel for pure-strafe (A/D) input
+	CPMStrafeSpeedCap: number, -- wishspeed cap for pure-strafe input
 
 	-- Vertical
 	Gravity: number,
@@ -56,6 +68,20 @@ export type MovementProfile = {
 	-- Landing
 	LandingRecoveryTime: number,
 	HardLandingSpeed: number,
+
+	-- Wall running
+	WallRunEnabled: boolean,
+	WallRunMaxTime: number, -- budget in seconds; refilled on ground contact
+	WallRunGravityScale: number, -- 0..1; the reduced pull is what sells the run
+	WallRunMinSpeed: number, -- horizontal speed required to stay attached
+	WallRunStickDistance: number, -- wall probe reach beyond the collider half-width
+	WallRunJumpKick: number, -- horizontal push off the wall on jump
+	WallRunJumpBoost: number, -- vertical velocity granted by a wall jump
+
+	-- Ladders (Source-style)
+	LadderEnabled: boolean,
+	LadderClimbSpeed: number,
+	LadderJumpKick: number, -- push away from the ladder on jump-off
 }
 
 local Default: MovementProfile = {
@@ -65,9 +91,15 @@ local Default: MovementProfile = {
 	Friction = 6,
 	StopSpeed = 6.25,
 
+	AirAccelMode = "Quake" :: AirAccelMode,
 	AirAcceleration = 40,
 	AirSpeedCap = 1.9, -- ~30ups in Quake scale; low cap => strong strafe gain
 	MaxAirWishSpeed = 20,
+
+	CPMAirControl = 150,
+	CPMAirStopAcceleration = 2.5,
+	CPMStrafeAcceleration = 70,
+	CPMStrafeSpeedCap = 1.9,
 
 	Gravity = 50,
 	JumpPower = 17,
@@ -97,6 +129,18 @@ local Default: MovementProfile = {
 
 	LandingRecoveryTime = 0.18,
 	HardLandingSpeed = 30,
+
+	WallRunEnabled = true,
+	WallRunMaxTime = 1.6,
+	WallRunGravityScale = 0.25,
+	WallRunMinSpeed = 14,
+	WallRunStickDistance = 1.0,
+	WallRunJumpKick = 18,
+	WallRunJumpBoost = 15,
+
+	LadderEnabled = true,
+	LadderClimbSpeed = 12,
+	LadderJumpKick = 16,
 }
 
 -- QuakeLive-flavoured: tighter ground control, harsher stops, faster bhop ceiling.
@@ -106,17 +150,31 @@ QuakeLive.Friction = 8
 QuakeLive.AirAcceleration = 70
 QuakeLive.AirSpeedCap = 1.6
 
--- Source-flavoured: lower air accel, classic CS surf behaviour.
+-- Source-flavoured: Source AirAccelerate, lower air accel, classic CS surf.
 local Source: MovementProfile = table.clone(Default)
+Source.AirAccelMode = "Source"
 Source.AirAcceleration = 25
 Source.AirSpeedCap = 1.9
 Source.AutoJump = false
 Source.GroundSpeed = 16
 
+-- Challenge ProMode: air control on W/S, high-accel strafe on pure A/D,
+-- snappier ground handling. The classic VQ3+CPM hybrid feel.
+local CPM: MovementProfile = table.clone(Default)
+CPM.AirAccelMode = "CPM"
+CPM.GroundAcceleration = 15
+CPM.Friction = 8
+CPM.AirAcceleration = 30
+CPM.AirSpeedCap = 1.9
+
+local frozenDefault = table.freeze(Default) :: MovementProfile
+
 local Profiles = table.freeze({
-	Default = table.freeze(Default) :: MovementProfile,
+	Default = frozenDefault,
+	Quake = frozenDefault, -- alias: the default IS the Quake feel
 	QuakeLive = table.freeze(QuakeLive) :: MovementProfile,
 	Source = table.freeze(Source) :: MovementProfile,
+	CPM = table.freeze(CPM) :: MovementProfile,
 })
 
 return Profiles

@@ -1,0 +1,132 @@
+<roblox version="4">
+	<Item class="ScreenGui">
+		<Properties>
+			<string name="Name">ReplayHUD</string>
+			<bool name="ResetOnSpawn">false</bool>
+			<bool name="IgnoreGuiInset">true</bool>
+			<token name="ZIndexBehavior">1</token>
+			<int name="DisplayOrder">6</int>
+		</Properties>
+		<Item class="Frame">
+			<Properties>
+				<string name="Name">Panel</string>
+				<Vector2 name="AnchorPoint">
+					<X>0</X>
+					<Y>1</Y>
+				</Vector2>
+				<UDim2 name="Position">
+					<XS>0</XS><XO>16</XO>
+					<YS>1</YS><YO>-16</YO>
+				</UDim2>
+				<UDim2 name="Size">
+					<XS>0</XS><XO>190</XO>
+					<YS>0</YS><YO>132</YO>
+				</UDim2>
+				<Color3uint8 name="BackgroundColor3">0</Color3uint8>
+				<float name="BackgroundTransparency">0.45</float>
+				<int name="BorderSizePixel">0</int>
+			</Properties>
+			<Item class="TextLabel">
+				<Properties>
+					<string name="Name">Title</string>
+					<UDim2 name="Position">
+						<XS>0</XS><XO>12</XO>
+						<YS>0</YS><YO>4</YO>
+					</UDim2>
+					<UDim2 name="Size">
+						<XS>0</XS><XO>100</XO>
+						<YS>0</YS><YO>20</YO>
+					</UDim2>
+					<float name="BackgroundTransparency">1</float>
+					<token name="Font">10</token>
+					<string name="Text">REPLAY</string>
+					<int name="TextSize">16</int>
+					<Color3uint8 name="TextColor3">4287141041</Color3uint8>
+					<token name="TextXAlignment">0</token>
+				</Properties>
+			</Item>
+			<Item class="TextLabel">
+				<Properties>
+					<string name="Name">Hint</string>
+					<Vector2 name="AnchorPoint">
+						<X>1</X>
+						<Y>0</Y>
+					</Vector2>
+					<UDim2 name="Position">
+						<XS>1</XS><XO>-12</XO>
+						<YS>0</YS><YO>4</YO>
+					</UDim2>
+					<UDim2 name="Size">
+						<XS>0</XS><XO>90</XO>
+						<YS>0</YS><YO>20</YO>
+					</UDim2>
+					<float name="BackgroundTransparency">1</float>
+					<token name="Font">10</token>
+					<string name="Text">[G] MOUSE</string>
+					<int name="TextSize">12</int>
+					<Color3uint8 name="TextColor3">4287141041</Color3uint8>
+					<token name="TextXAlignment">2</token>
+				</Properties>
+			</Item>
+			<Item class="TextButton">
+				<Properties>
+					<string name="Name">RecordButton</string>
+					<UDim2 name="Position">
+						<XS>0</XS><XO>12</XO>
+						<YS>0</YS><YO>30</YO>
+					</UDim2>
+					<UDim2 name="Size">
+						<XS>0</XS><XO>166</XO>
+						<YS>0</YS><YO>28</YO>
+					</UDim2>
+					<Color3uint8 name="BackgroundColor3">4280821800</Color3uint8>
+					<float name="BackgroundTransparency">0.2</float>
+					<int name="BorderSizePixel">0</int>
+					<token name="Font">10</token>
+					<string name="Text">REC</string>
+					<int name="TextSize">16</int>
+					<Color3uint8 name="TextColor3">4294967295</Color3uint8>
+				</Properties>
+			</Item>
+			<Item class="TextButton">
+				<Properties>
+					<string name="Name">PlayButton</string>
+					<UDim2 name="Position">
+						<XS>0</XS><XO>12</XO>
+						<YS>0</YS><YO>64</YO>
+					</UDim2>
+					<UDim2 name="Size">
+						<XS>0</XS><XO>166</XO>
+						<YS>0</YS><YO>28</YO>
+					</UDim2>
+					<Color3uint8 name="BackgroundColor3">4280821800</Color3uint8>
+					<float name="BackgroundTransparency">0.2</float>
+					<int name="BorderSizePixel">0</int>
+					<token name="Font">10</token>
+					<string name="Text">PLAY</string>
+					<int name="TextSize">16</int>
+					<Color3uint8 name="TextColor3">4294967295</Color3uint8>
+				</Properties>
+			</Item>
+			<Item class="TextLabel">
+				<Properties>
+					<string name="Name">Status</string>
+					<UDim2 name="Position">
+						<XS>0</XS><XO>12</XO>
+						<YS>0</YS><YO>98</YO>
+					</UDim2>
+					<UDim2 name="Size">
+						<XS>0</XS><XO>166</XO>
+						<YS>0</YS><YO>26</YO>
+					</UDim2>
+					<float name="BackgroundTransparency">1</float>
+					<token name="Font">10</token>
+					<string name="Text">IDLE</string>
+					<int name="TextSize">14</int>
+					<Color3uint8 name="TextColor3">4294967295</Color3uint8>
+					<token name="TextXAlignment">0</token>
+				</Properties>
+			</Item>
+		</Item>
+	</Item>
+</roblox>

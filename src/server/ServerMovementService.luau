@@ -29,7 +29,9 @@ local Collision = require(ReplicatedStorage.MovementFramework.Simulation.Collisi
 local Simulator = require(ReplicatedStorage.MovementFramework.Simulation.Simulator)
 local MoveState = require(ReplicatedStorage.MovementFramework.Simulation.MoveState)
 local InputCommand = require(ReplicatedStorage.MovementFramework.Networking.InputCommand)
+local RingBuffer = require(ReplicatedStorage.MovementFramework.Networking.RingBuffer)
 local Transport = require(ReplicatedStorage.MovementFramework.Networking.Transport)
+local NetworkConfig = require(ReplicatedStorage.MovementFramework.Config.NetworkConfig)
 
 export type ServerMovementService = {
 	Name: string,
@@ -41,11 +43,12 @@ export type ServerMovementService = {
 
 type PlayerSim = {
 	state: Types.MoveState,
-	cmd: Types.InputCommand, -- staged (validated) command awaiting simulation
-	scratch: Types.InputCommand, -- deserialize target; rejected packets never corrupt cmd
+	scratch: Types.InputCommand, -- deserialize target; rejected packets never corrupt the queue
+	queue: RingBuffer.RingBuffer<Types.InputCommand>, -- validated commands awaiting simulation
+	free: { Types.InputCommand }, -- recycled command tables (zero steady-state allocation)
 	snapshot: buffer,
-	lastTick: number,
-	pending: boolean,
+	lastTick: number, -- newest simulated tick
+	newestQueued: number, -- newest accepted tick (monotonicity gate)
 	character: Model?,
 }
 
@@ -70,11 +73,12 @@ local FIXED_DT = 1 / 60
 local function onPlayerAdded(self: ServiceInternal, player: Player)
 	local sim: PlayerSim = {
 		state = MoveState.new(Vector3.new(0, 10, 0)),
-		cmd = InputCommand.new(),
 		scratch = InputCommand.new(),
+		queue = RingBuffer.new(NetworkConfig.Default.InputQueueCapacity),
+		free = {},
 		snapshot = buffer.create(MoveState.SNAPSHOT_BYTES),
 		lastTick = 0,
-		pending = false,
+		newestQueued = 0,
 		character = nil,
 	}
 	self._players[player] = sim
@@ -82,8 +86,16 @@ local function onPlayerAdded(self: ServiceInternal, player: Player)
 	player.CharacterAdded:Connect(function(character: Model)
 		sim.character = character
 		local root = character:WaitForChild("HumanoidRootPart") :: BasePart
+		local humanoid = character:WaitForChild("Humanoid") :: Humanoid
+		-- The server owns the truth: freezing engine physics on the container
+		-- lets per-tick CFrame writes replicate cleanly to every other client
+		-- instead of fighting the Humanoid state machine between snapshots.
+		humanoid.EvaluateStateMachine = false
+		root.Anchored = true
 		sim.state = MoveState.new(root.Position)
 		sim.lastTick = 0
+		sim.newestQueued = 0
+		sim.queue:Clear()
 	end)
 end
 
@@ -96,9 +108,9 @@ local function isFinite(n: number): boolean
 	return n == n and n ~= math.huge and n ~= -math.huge
 end
 
--- Validate + stage the newest command. We keep only the latest (unreliable
--- transport); a full server would buffer & replay every command, which the
--- deterministic Simulator already supports.
+-- Validate + enqueue. Buffering (instead of keep-latest) is what makes the
+-- reconciliation loop stable under jitter: two packets arriving in one
+-- heartbeat both simulate, so the server tick never falls behind the client's.
 local function processInput(self: ServiceInternal, player: Player, packet: buffer)
 	local sim = self._players[player]
 	if not sim then
@@ -108,7 +120,7 @@ local function processInput(self: ServiceInternal, player: Player, packet: buffe
 		return
 	end
 	-- Deserialize into a scratch command first: a rejected packet (stale,
-	-- reordered, tampered) must never corrupt the currently staged command.
+	-- reordered, tampered) must never corrupt already-validated commands.
 	local staged = sim.scratch
 	InputCommand.deserialize(staged, packet, 0)
 
@@ -119,35 +131,61 @@ local function processInput(self: ServiceInternal, player: Player, packet: buffe
 		return
 	end
 
-	-- Reject stale / duplicate / reordered ticks - including against the
-	-- command that is already staged but not yet simulated, so an out-of-order
-	-- older packet can never replace a newer staged one.
-	local newestKnown = if sim.pending then sim.cmd.tick else sim.lastTick
-	if staged.tick <= newestKnown then
+	-- Monotonicity gate: rejects duplicates and UDP reordering in one check.
+	if staged.tick <= sim.newestQueued or staged.tick <= sim.lastTick then
 		return
 	end
+	sim.newestQueued = staged.tick
 
 	staged.dt = FIXED_DT -- server-dictated timestep; never trust the wire
-	InputCommand.copyInto(sim.cmd, staged)
-	sim.pending = true
+
+	local cmd = table.remove(sim.free) or InputCommand.new()
+	InputCommand.copyInto(cmd, staged)
+	local evicted = sim.queue:Push(cmd)
+	if evicted then
+		-- Queue overflow (client bursting faster than we drain): drop the
+		-- oldest command and recycle its table.
+		table.insert(sim.free, evicted)
+	end
 end
 
+local MAX_COMMANDS_PER_TICK = NetworkConfig.Default.MaxCommandsPerTick
+
 local function stepPlayer(self: ServiceInternal, player: Player, sim: PlayerSim)
-	if not sim.pending or not sim.character then
+	if not sim.character then
 		return
 	end
-	sim.pending = false
-	sim.lastTick = sim.cmd.tick
-
 	-- Point the shared collision world at this player's world (ignore own body).
 	self._collision:SetIgnoreCharacter(sim.character)
 
-	self._simulator:Step(sim.state, sim.cmd)
+	-- Drain a bounded burst: 1 command in the steady state, more only to
+	-- absorb network jitter. The cap prevents a hoarding client from
+	-- simulating faster than real time (time-dilation exploit).
+	local processed = false
+	local lastYaw = 0
+	for _ = 1, MAX_COMMANDS_PER_TICK do
+		local cmd = sim.queue:Pop()
+		if cmd == nil then
+			break
+		end
+		sim.lastTick = cmd.tick
+		lastYaw = cmd.yaw
+		self._simulator:Step(sim.state, cmd)
+		-- Modifier parity: the client applies modifiers after every predicted
+		-- tick, so the authoritative sim must run the SAME ordered list here
+		-- (register identical modifiers on both bootstraps).
+		self._fw:ApplyModifiersTo(sim.state, FIXED_DT)
+		table.insert(sim.free, cmd)
+		processed = true
+	end
+	if not processed then
+		return
+	end
 
 	-- Reflect authoritative transform onto the server character container.
 	local root = sim.character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if root then
-		root.CFrame = CFrame.new(sim.state.position) * CFrame.Angles(0, sim.cmd.yaw, 0)
+		root.CFrame = CFrame.new(sim.state.position) * CFrame.Angles(0, lastYaw, 0)
 	end
 
 	-- Reply with authoritative snapshot (reconciliation input for the client).

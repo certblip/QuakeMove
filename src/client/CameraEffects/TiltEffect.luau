@@ -24,12 +24,21 @@ function ICameraEffect.Update(self: TiltInternal, ctx: Types.CameraContext, out:
 	if not cfg.Enabled then
 		return
 	end
-	-- Lateral velocity relative to look direction (right vector dot velocity).
+	-- Lateral velocity relative to look direction. True right = forward x up
+	-- = (-z, 0, x); the flipped variant inverts velocity tilt so it fights
+	-- the strafe tilt instead of reinforcing it.
 	local look = ctx.lookVector
-	local right = Vector3.new(look.Z, 0, -look.X)
+	local right = Vector3.new(-look.Z, 0, look.X)
 	local lateralVel = ctx.state.velocity:Dot(right)
 
 	local target = -ctx.strafeInput * cfg.StrafeTilt - lateralVel * cfg.VelocityTilt
+	-- Wall-run hook: lean away from the wall. The simulator exposes the wall
+	-- side through MoveState precisely so camera feel needs zero coupling to
+	-- the wall-run solver.
+	local state = ctx.state
+	if state.wallRunSide ~= 0 and not state.grounded then
+		target += state.wallRunSide * cfg.WallRunTilt
+	end
 	self._roll += (target - self._roll) * (1 - math.exp(-cfg.Responsiveness * ctx.dt))
 	out.rotationOffset += Vector3.new(0, 0, self._roll)
 end

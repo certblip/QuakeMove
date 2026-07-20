@@ -22,10 +22,8 @@ assert(
 local Framework = require(ReplicatedStorage.MovementFramework)
 local MovementConfig = Framework.MovementConfig
 
--- Create remotes eagerly so clients never race the folder.
-local Transport = require(ReplicatedStorage.MovementFramework.Networking.Transport)
-Transport.newServer()
-
+-- Remotes are created by ServerMovementService.Init (idempotent) before any
+-- player can join; the client side WaitForChild's them, so no eager copy here.
 local ServerMovementService = require(ServerScriptService:WaitForChild("ServerMovementService"))
 
 local fw = Framework.create({

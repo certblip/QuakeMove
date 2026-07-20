@@ -20,6 +20,8 @@ local StateMachine = require(script.Simulation.StateMachine)
 local MovementConfig = require(script.Config.MovementConfig)
 local CameraConfig = require(script.Config.CameraConfig)
 local InputConfig = require(script.Config.InputConfig)
+local NetworkConfig = require(script.Config.NetworkConfig)
+local Replay = require(script.Networking.Replay)
 
 export type Modifier = {
 	Name: string,
@@ -46,6 +48,7 @@ export type MovementFramework = {
 	AddModifier: (self: MovementFramework, modifier: Modifier) -> (),
 	RemoveModifier: (self: MovementFramework, name: string) -> (),
 	ApplyModifiers: (self: MovementFramework, dt: number) -> (),
+	ApplyModifiersTo: (self: MovementFramework, state: Types.MoveState, dt: number) -> (),
 	Enable: (self: MovementFramework) -> (),
 	Disable: (self: MovementFramework) -> (),
 	IsEnabled: (self: MovementFramework) -> boolean,
@@ -117,12 +120,20 @@ function Framework.RemoveModifier(self: FrameworkInternal, name: string)
 	end
 end
 
-function Framework.ApplyModifiers(self: FrameworkInternal, dt: number)
+-- State-parameterised so the SERVER can run the same ordered list against its
+-- per-player states. Client prediction, rollback replay and the authoritative
+-- sim must all execute identical modifier passes or pads/zones become
+-- permanent prediction errors.
+function Framework.ApplyModifiersTo(self: FrameworkInternal, state: Types.MoveState, dt: number)
 	local profile = self.Simulator:GetProfile()
 	local mods = self._modifiers
 	for i = 1, #mods do
-		mods[i].Apply(self.State, profile, dt)
+		mods[i].Apply(state, profile, dt)
 	end
+end
+
+function Framework.ApplyModifiers(self: FrameworkInternal, dt: number)
+	self:ApplyModifiersTo(self.State, dt)
 end
 
 function Framework.Enable(self: FrameworkInternal)
@@ -155,6 +166,7 @@ function Framework.Destroy(self: FrameworkInternal)
 	self.Scheduler:Stop()
 	self.Registry:Destroy()
 	self.StateChanged:DisconnectAll()
+	self._debugChanged:DisconnectAll()
 end
 
 export type FrameworkOptions = {
@@ -196,5 +208,7 @@ return table.freeze({
 	MovementConfig = MovementConfig,
 	CameraConfig = CameraConfig,
 	InputConfig = InputConfig,
+	NetworkConfig = NetworkConfig,
+	Replay = Replay,
 	Signal = Signal,
 })

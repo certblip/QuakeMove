@@ -4,9 +4,17 @@
 	Purpose: Construction, copying and (de)serialization of the simulation state.
 	Performance: copyInto reuses the destination table - the prediction ring buffer
 	holds pre-allocated snapshots and never allocates during gameplay.
-	Wire format: 41 bytes per snapshot (u32 tick, 6xf32 pos/vel, u8 flags
-	[0x80 grounded, 0x40 jumpHeldPrev, low 6 bits stateId], 3xf32 normal)
-	written with the buffer library.
+	Wire format v2: 86 bytes per snapshot. Every field that AFFECTS the
+	simulation travels on the wire - reconciliation adopts server state
+	wholesale, and any omitted field would corrupt the rollback replay:
+	  0  u32 tick
+	  4  3xf32 position          16 3xf32 velocity
+	  28 u8 flags [0x80 grounded, 0x40 jumpHeldPrev, 0x20 onLadder,
+	              low 5 bits stateId]
+	  29 3xf32 groundNormal
+	  41 f32 coyote  45 f32 jumpBuffer  49 f32 landing  53 f32 slide
+	  57 f32 wallRunTimer  61 i8 wallRunSide  62 3xf32 wallNormal
+	  74 3xf32 ladderNormal
 ]]
 
 local Types = require(script.Parent.Parent.Core.Types)
@@ -28,6 +36,11 @@ function MoveState.new(position: Vector3): Types.MoveState
 		landingTimer = 0,
 		slideTimer = 0,
 		jumpHeldPrev = false,
+		wallRunTimer = 0,
+		wallRunSide = 0,
+		wallNormal = Vector3.yAxis,
+		onLadder = false,
+		ladderNormal = Vector3.yAxis,
 		jumpedThisTick = false,
 		landedThisTick = false,
 		landingSpeed = 0,
@@ -52,6 +65,11 @@ function MoveState.copyInto(dst: Types.MoveState, src: Types.MoveState)
 	dst.landingTimer = src.landingTimer
 	dst.slideTimer = src.slideTimer
 	dst.jumpHeldPrev = src.jumpHeldPrev
+	dst.wallRunTimer = src.wallRunTimer
+	dst.wallRunSide = src.wallRunSide
+	dst.wallNormal = src.wallNormal
+	dst.onLadder = src.onLadder
+	dst.ladderNormal = src.ladderNormal
 	dst.jumpedThisTick = src.jumpedThisTick
 	dst.landedThisTick = src.landedThisTick
 	dst.landingSpeed = src.landingSpeed
@@ -61,7 +79,7 @@ function MoveState.copyInto(dst: Types.MoveState, src: Types.MoveState)
 	dst.lastAcceleration = src.lastAcceleration
 end
 
-MoveState.SNAPSHOT_BYTES = 41
+MoveState.SNAPSHOT_BYTES = 86
 
 function MoveState.serialize(state: Types.MoveState, buf: buffer, offset: number)
 	buffer.writeu32(buf, offset, state.tick)
@@ -71,17 +89,32 @@ function MoveState.serialize(state: Types.MoveState, buf: buffer, offset: number
 	buffer.writef32(buf, offset + 16, state.velocity.X)
 	buffer.writef32(buf, offset + 20, state.velocity.Y)
 	buffer.writef32(buf, offset + 24, state.velocity.Z)
-	local flags = state.stateId -- stateId occupies the low 6 bits (values 1..9)
+	local flags = state.stateId -- low 5 bits (ids are <= 31 by contract)
 	if state.grounded then
 		flags += 0x80
 	end
 	if state.jumpHeldPrev then
 		flags += 0x40
 	end
+	if state.onLadder then
+		flags += 0x20
+	end
 	buffer.writeu8(buf, offset + 28, flags)
 	buffer.writef32(buf, offset + 29, state.groundNormal.X)
 	buffer.writef32(buf, offset + 33, state.groundNormal.Y)
 	buffer.writef32(buf, offset + 37, state.groundNormal.Z)
+	buffer.writef32(buf, offset + 41, state.coyoteTimer)
+	buffer.writef32(buf, offset + 45, state.jumpBufferTimer)
+	buffer.writef32(buf, offset + 49, state.landingTimer)
+	buffer.writef32(buf, offset + 53, state.slideTimer)
+	buffer.writef32(buf, offset + 57, state.wallRunTimer)
+	buffer.writei8(buf, offset + 61, state.wallRunSide)
+	buffer.writef32(buf, offset + 62, state.wallNormal.X)
+	buffer.writef32(buf, offset + 66, state.wallNormal.Y)
+	buffer.writef32(buf, offset + 70, state.wallNormal.Z)
+	buffer.writef32(buf, offset + 74, state.ladderNormal.X)
+	buffer.writef32(buf, offset + 78, state.ladderNormal.Y)
+	buffer.writef32(buf, offset + 82, state.ladderNormal.Z)
 end
 
 function MoveState.deserialize(state: Types.MoveState, buf: buffer, offset: number)
@@ -99,11 +132,28 @@ function MoveState.deserialize(state: Types.MoveState, buf: buffer, offset: numb
 	local flags = buffer.readu8(buf, offset + 28)
 	state.grounded = bit32.band(flags, 0x80) ~= 0
 	state.jumpHeldPrev = bit32.band(flags, 0x40) ~= 0
-	state.stateId = bit32.band(flags, 0x3F)
+	state.onLadder = bit32.band(flags, 0x20) ~= 0
+	state.stateId = bit32.band(flags, 0x1F)
 	state.groundNormal = Vector3.new(
 		buffer.readf32(buf, offset + 29),
 		buffer.readf32(buf, offset + 33),
 		buffer.readf32(buf, offset + 37)
+	)
+	state.coyoteTimer = buffer.readf32(buf, offset + 41)
+	state.jumpBufferTimer = buffer.readf32(buf, offset + 45)
+	state.landingTimer = buffer.readf32(buf, offset + 49)
+	state.slideTimer = buffer.readf32(buf, offset + 53)
+	state.wallRunTimer = buffer.readf32(buf, offset + 57)
+	state.wallRunSide = buffer.readi8(buf, offset + 61)
+	state.wallNormal = Vector3.new(
+		buffer.readf32(buf, offset + 62),
+		buffer.readf32(buf, offset + 66),
+		buffer.readf32(buf, offset + 70)
+	)
+	state.ladderNormal = Vector3.new(
+		buffer.readf32(buf, offset + 74),
+		buffer.readf32(buf, offset + 78),
+		buffer.readf32(buf, offset + 82)
 	)
 end
 

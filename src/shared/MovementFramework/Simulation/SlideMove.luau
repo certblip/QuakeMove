@@ -22,6 +22,10 @@ export type SlideOutput = {
 	collisionCount: number,
 	hitCeiling: boolean,
 	hitWall: boolean,
+	-- Clip planes touched during the last solve, exposed for debug
+	-- visualization. Pre-allocated; only indices 1..planeCount are valid.
+	planes: { Vector3 },
+	planeCount: number,
 }
 
 local SlideMove = {}
@@ -44,6 +48,7 @@ local function slide(
 	out.collisionCount = 0
 	out.hitCeiling = false
 	out.hitWall = false
+	out.planeCount = 0
 
 	for _ = 1, maxBumps do
 		if timeLeft <= 0 then
@@ -72,6 +77,9 @@ local function slide(
 		end
 		numPlanes += 1
 		planes[numPlanes] = tr.normal
+		-- Mirror into the output for debug visualization (values, no aliasing).
+		out.planes[numPlanes] = tr.normal
+		out.planeCount = numPlanes
 
 		-- Clip against the new plane, then verify we do not violate earlier ones.
 		local clipped = VectorMath.clipVelocity(velocity, tr.normal, overbounce)
@@ -152,6 +160,8 @@ function SlideMove.newOutput(): SlideOutput
 		collisionCount = 0,
 		hitCeiling = false,
 		hitWall = false,
+		planes = table.create(8, Vector3.zero),
+		planeCount = 0,
 	}
 end
 

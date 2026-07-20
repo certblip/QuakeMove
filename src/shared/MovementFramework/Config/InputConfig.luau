@@ -8,7 +8,7 @@
 ]]
 
 export type ActionName = "MoveForward" | "MoveBack" | "MoveLeft" | "MoveRight"
-	| "Jump" | "Sprint" | "Slide" | "ToggleDebug"
+	| "Jump" | "Sprint" | "Slide" | "ToggleDebug" | "ToggleMouse"
 
 export type Binding = {
 	Keyboard: { Enum.KeyCode },
@@ -32,6 +32,7 @@ local Default: InputProfile = {
 		Sprint = { Keyboard = { Enum.KeyCode.LeftShift }, Gamepad = { Enum.KeyCode.ButtonL3 } },
 		Slide = { Keyboard = { Enum.KeyCode.LeftControl, Enum.KeyCode.C }, Gamepad = { Enum.KeyCode.ButtonB } },
 		ToggleDebug = { Keyboard = { Enum.KeyCode.F3 }, Gamepad = { Enum.KeyCode.DPadUp } },
+		ToggleMouse = { Keyboard = { Enum.KeyCode.G }, Gamepad = { Enum.KeyCode.DPadDown } },
 	},
 	GamepadDeadzone = 0.18,
 	MouseSensitivity = 1.0,

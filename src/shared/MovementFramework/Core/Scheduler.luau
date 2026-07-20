@@ -79,7 +79,13 @@ function Scheduler.Start(self: SchedulerInternal)
 			self._accumulator -= fixedDt
 			self._tick += 1
 			for i = 1, #fixed do
-				fixed[i].fn(self._tick, fixedDt)
+				-- Isolation: one faulting service must not starve its
+				-- siblings (on the server that would freeze EVERY player).
+				-- Cast: () -> () callbacks trip the solver's xpcall arity check.
+				local ok, err = xpcall(fixed[i].fn :: (number, number) -> any, debug.traceback, self._tick, fixedDt)
+				if not ok then
+					warn("[Scheduler] fixed callback failed:\n", err)
+				end
 			end
 		end
 		self._alpha = self._accumulator / fixedDt
@@ -90,7 +96,10 @@ function Scheduler.Start(self: SchedulerInternal)
 			local render = self._render
 			local alpha = self._alpha
 			for i = 1, #render do
-				render[i].fn(dt, alpha)
+				local ok, err = xpcall(render[i].fn :: (number, number) -> any, debug.traceback, dt, alpha)
+				if not ok then
+					warn("[Scheduler] render callback failed:\n", err)
+				end
 			end
 		end)
 	end

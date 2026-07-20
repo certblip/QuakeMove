@@ -26,8 +26,10 @@ export type InputService = {
 	SetProfile: (self: InputService, profile: InputConfig.InputProfile) -> (),
 	SetAxis: (self: InputService, x: number, z: number) -> (), -- external/touch injection
 	SetActionHeld: (self: InputService, action: InputConfig.ActionName, held: boolean) -> (),
+	IsActionHeld: (self: InputService, action: InputConfig.ActionName) -> boolean,
 	BuildCommand: (self: InputService, cmd: Types.InputCommand, tick: number, dt: number, yaw: number, pitch: number) -> (),
 	GetDebugToggled: (self: InputService) -> boolean,
+	GetMouseToggled: (self: InputService) -> boolean,
 	Init: (self: InputService, registry: any) -> (),
 	Start: (self: InputService) -> (),
 	Destroy: (self: InputService) -> (),
@@ -43,6 +45,7 @@ type InputInternal = InputService & {
 	_gamepadZ: number,
 	_jumpQueued: boolean, -- edge event, consumed by the next BuildCommand
 	_debugToggled: boolean,
+	_mouseToggled: boolean,
 	_conns: { RBXScriptConnection },
 }
 
@@ -81,11 +84,26 @@ function InputService.SetActionHeld(self: InputInternal, action: InputConfig.Act
 	if action == "ToggleDebug" and held and not was then
 		self._debugToggled = true
 	end
+	if action == "ToggleMouse" and held and not was then
+		self._mouseToggled = true
+	end
+end
+
+-- Read-only action state for HUD/consumers (rebind-friendly: consumers ask
+-- about abstract actions, never physical keys).
+function InputService.IsActionHeld(self: InputInternal, action: InputConfig.ActionName): boolean
+	return self._held[action] == true
 end
 
 function InputService.GetDebugToggled(self: InputInternal): boolean
 	local v = self._debugToggled
 	self._debugToggled = false
+	return v
+end
+
+function InputService.GetMouseToggled(self: InputInternal): boolean
+	local v = self._mouseToggled
+	self._mouseToggled = false
 	return v
 end
 
@@ -160,6 +178,14 @@ function InputService.Start(self: InputInternal)
 		end
 	end))
 
+	-- Alt-tab safety: InputEnded does not fire for keys released while the
+	-- window is unfocused, which would leave movement keys held forever.
+	table.insert(conns, UserInputService.WindowFocusReleased:Connect(function()
+		table.clear(self._held)
+		self._gamepadX = 0
+		self._gamepadZ = 0
+	end))
+
 	table.insert(conns, UserInputService.InputChanged:Connect(function(io: InputObject, processed: boolean)
 		if processed then
 			return
@@ -200,6 +226,7 @@ local function new(profile: InputConfig.InputProfile): InputService
 		_gamepadZ = 0,
 		_jumpQueued = false,
 		_debugToggled = false,
+		_mouseToggled = false,
 		_conns = {},
 	}, InputService) :: any
 end

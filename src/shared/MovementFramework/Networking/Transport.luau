@@ -39,6 +39,11 @@ function RemoteTransport.OnSnapshot(self: RemoteInternal, handler: (packet: buff
 	if self._isServer then
 		return
 	end
+	-- Rebinding replaces the previous handler; without the disconnect the old
+	-- connection would leak and double-process every snapshot.
+	if self._conn then
+		self._conn:Disconnect()
+	end
 	self._conn = self._snapshot.OnClientEvent:Connect(function(packet: buffer)
 		handler(packet)
 	end)

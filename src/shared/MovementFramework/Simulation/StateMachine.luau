@@ -27,6 +27,8 @@ local STATE_NAMES: { [number]: string } = {
 	[MoveStates.Sliding] = "Sliding",
 	[MoveStates.Surfing] = "Surfing",
 	[MoveStates.Ramp] = "Ramp",
+	[MoveStates.WallRunning] = "WallRunning",
+	[MoveStates.Ladder] = "Ladder",
 }
 
 function StateMachine.name(id: Types.MoveStateId): string
@@ -41,11 +43,19 @@ function StateMachine.evaluate(
 	surfing: boolean,
 	sprinting: boolean
 ): Types.MoveStateId
+	-- Attachment states outrank everything: they gate physics, not just visuals.
+	if state.onLadder then
+		return MoveStates.Ladder
+	end
+
 	if surfing then
 		return MoveStates.Surfing
 	end
 
 	if not state.grounded then
+		if state.wallRunSide ~= 0 then
+			return MoveStates.WallRunning
+		end
 		if state.velocity.Y > 0.5 then
 			return MoveStates.Jumping
 		end

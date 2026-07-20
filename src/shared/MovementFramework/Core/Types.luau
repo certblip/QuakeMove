@@ -21,6 +21,10 @@ local MoveStates = table.freeze({
 	Sliding = 7,
 	Surfing = 8,
 	Ramp = 9,
+	-- Appended (never reorder: ids replicate). Ids must stay <= 31: the
+	-- snapshot packs stateId into the low 5 bits of the flags byte.
+	WallRunning = 10,
+	Ladder = 11,
 })
 
 -- Bit flags packed into InputCommand.buttons.
@@ -66,6 +70,16 @@ export type MoveState = {
 	-- prediction rollback/replay. Replicated via the snapshot flags byte.
 	jumpHeldPrev: boolean,
 
+	-- Wall running. All of it lives in MoveState (not in the solver) so that
+	-- prediction rollback replays wall runs bit-identically.
+	wallRunTimer: number, -- remaining wall-run budget; refilled on ground contact
+	wallRunSide: number, -- -1 wall on the left, +1 on the right, 0 inactive
+	wallNormal: Vector3, -- unit normal of the current wall
+
+	-- Ladder movement (Source-style).
+	onLadder: boolean,
+	ladderNormal: Vector3,
+
 	-- bookkeeping for effects / debug (written by sim, read-only elsewhere)
 	jumpedThisTick: boolean,
 	landedThisTick: boolean,
@@ -85,6 +99,10 @@ export type TraceResult = {
 	position: Vector3, -- safe end position of the swept box
 	instance: Instance?,
 	startSolid: boolean,
+	-- Climbable surface flag. Filled by the collision layer (tag/attribute
+	-- lookup) so the simulation stays engine-free while ladders remain
+	-- level-authorable content.
+	ladder: boolean,
 }
 
 export type TraceFn = (origin: Vector3, delta: Vector3) -> TraceResult

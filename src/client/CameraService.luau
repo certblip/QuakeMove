@@ -27,6 +27,7 @@ local FOVEffect = require(script.Parent.CameraEffects.FOVEffect)
 local TiltEffect = require(script.Parent.CameraEffects.TiltEffect)
 local ShakeEffect = require(script.Parent.CameraEffects.ShakeEffect)
 local SwayEffect = require(script.Parent.CameraEffects.SwayEffect)
+local SlideEffect = require(script.Parent.CameraEffects.SlideEffect)
 
 export type CameraService = {
 	Name: string,
@@ -34,8 +35,13 @@ export type CameraService = {
 	SetProfile: (self: CameraService, profile: CameraConfig.CameraProfile) -> (),
 	GetYaw: (self: CameraService) -> number,
 	GetPitch: (self: CameraService) -> number,
+	-- Programmatic look override (replay playback drives the view per tick).
+	SetLook: (self: CameraService, yaw: number, pitch: number) -> (),
 	SetEyeAnchor: (self: CameraService, getter: () -> Vector3) -> (),
 	AddTrauma: (self: CameraService, amount: number) -> (),
+	-- Frees/locks the cursor (GUI interaction); look input pauses while free.
+	ToggleMouseLock: (self: CameraService) -> (),
+	IsMouseUnlocked: (self: CameraService) -> boolean,
 	Render: (self: CameraService, dt: number, alpha: number, state: Types.MoveState, strafeInput: number) -> (),
 	Init: (self: CameraService, registry: any) -> (),
 	Start: (self: CameraService) -> (),
@@ -49,6 +55,9 @@ type CameraInternal = CameraService & {
 	_yaw: number,
 	_pitch: number,
 	_sensitivity: number,
+	_gamepadSens: number,
+	_gamepadLook: Vector3, -- last Thumbstick2 deflection, integrated per frame
+	_mouseUnlocked: boolean,
 	_eyeGetter: (() -> Vector3)?,
 	_camera: Camera,
 	_contribution: Types.CameraContribution,
@@ -67,6 +76,7 @@ function CameraService.SetProfile(self: CameraInternal, profile: CameraConfig.Ca
 	self._effects = {
 		HeadBob.new(profile.HeadBob),
 		SwayEffect.new(profile.Sway),
+		SlideEffect.new(profile.Slide),
 		LandingEffect.new(profile.Landing),
 		TiltEffect.new(profile.Tilt),
 		FOVEffect.new(profile.FOV),
@@ -82,12 +92,32 @@ function CameraService.GetPitch(self: CameraInternal): number
 	return self._pitch
 end
 
+function CameraService.SetLook(self: CameraInternal, yaw: number, pitch: number)
+	self._yaw = yaw
+	self._pitch = math.clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT)
+end
+
 function CameraService.SetEyeAnchor(self: CameraInternal, getter: () -> Vector3)
 	self._eyeGetter = getter
 end
 
 function CameraService.AddTrauma(self: CameraInternal, amount: number)
 	self._shake:AddTrauma(amount)
+end
+
+function CameraService.ToggleMouseLock(self: CameraInternal)
+	self._mouseUnlocked = not self._mouseUnlocked
+	if self._mouseUnlocked then
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		UserInputService.MouseIconEnabled = true
+	else
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+		UserInputService.MouseIconEnabled = false
+	end
+end
+
+function CameraService.IsMouseUnlocked(self: CameraInternal): boolean
+	return self._mouseUnlocked
 end
 
 function CameraService.Render(
@@ -101,6 +131,40 @@ function CameraService.Render(
 	if not getter then
 		return
 	end
+
+	-- Reclaim the camera every frame: the engine replaces CurrentCamera and
+	-- resets CameraType to Custom on respawn, which reactivates the default
+	-- PlayerModule (its TransparencyController then un-hides the character
+	-- and its controller fights our CFrame). Cheap: two compares per frame.
+	local camera = Workspace.CurrentCamera
+	if camera == nil then
+		return
+	end
+	self._camera = camera
+	if camera.CameraType ~= Enum.CameraType.Scriptable then
+		camera.CameraType = Enum.CameraType.Scriptable
+	end
+	-- Core scripts reset mouse state on focus/menu changes; keep enforcing
+	-- whichever mode (locked / G-unlocked) is currently ours.
+	local wantedBehavior = if self._mouseUnlocked
+		then Enum.MouseBehavior.Default
+		else Enum.MouseBehavior.LockCenter
+	if UserInputService.MouseBehavior ~= wantedBehavior then
+		UserInputService.MouseBehavior = wantedBehavior
+	end
+
+	-- Gamepad look: integrate the stored stick deflection every frame
+	-- (dt-scaled => turn rate is framerate-independent).
+	if not self._mouseUnlocked then
+		local gp = self._gamepadLook
+		local mag = math.sqrt(gp.X * gp.X + gp.Y * gp.Y)
+		if mag > 0.18 then -- matches InputConfig.Default.GamepadDeadzone
+			local sens = self._gamepadSens * dt
+			self._yaw -= gp.X * sens
+			self._pitch = math.clamp(self._pitch + gp.Y * sens, -PITCH_LIMIT, PITCH_LIMIT)
+		end
+	end
+
 	local eye = getter()
 
 	-- Reset the shared contribution (no allocation).
@@ -149,15 +213,18 @@ function CameraService.Start(self: CameraInternal)
 			return
 		end
 		if io.UserInputType == Enum.UserInputType.MouseMovement then
+			if self._mouseUnlocked then
+				return -- cursor is free for GUI: moving it must not turn the view
+			end
 			local delta = io.Delta
 			local sens = self._sensitivity * 0.0022
 			self._yaw -= delta.X * sens
 			self._pitch = math.clamp(self._pitch - delta.Y * sens, -PITCH_LIMIT, PITCH_LIMIT)
 		elseif io.KeyCode == Enum.KeyCode.Thumbstick2 then
-			-- Gamepad look handled per-frame elsewhere would be ideal; simple here.
-			local sens = self._sensitivity * 0.05
-			self._yaw -= io.Position.X * sens
-			self._pitch = math.clamp(self._pitch + io.Position.Y * sens, -PITCH_LIMIT, PITCH_LIMIT)
+			-- Store only: InputChanged fires on CHANGE, so integrating here
+			-- would stall the turn while the stick is held at a constant
+			-- deflection. Render integrates the stored value every frame.
+			self._gamepadLook = io.Position
 		end
 	end))
 end
@@ -174,7 +241,7 @@ function CameraService.Destroy(self: CameraInternal)
 	end
 end
 
-local function new(profile: CameraConfig.CameraProfile, sensitivity: number): CameraService
+local function new(profile: CameraConfig.CameraProfile, sensitivity: number, gamepadSensitivity: number?): CameraService
 	local self: CameraInternal = setmetatable({
 		Name = "CameraService",
 		Dependencies = nil,
@@ -184,6 +251,9 @@ local function new(profile: CameraConfig.CameraProfile, sensitivity: number): Ca
 		_yaw = 0,
 		_pitch = 0,
 		_sensitivity = sensitivity,
+		_gamepadSens = gamepadSensitivity or 6,
+		_gamepadLook = Vector3.zero,
+		_mouseUnlocked = false,
 		_eyeGetter = nil,
 		_camera = Workspace.CurrentCamera,
 		_contribution = { positionOffset = Vector3.zero, rotationOffset = Vector3.zero, fovOffset = 0 },

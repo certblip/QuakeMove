@@ -42,14 +42,19 @@ function GroundTracer.trace(
 	info.angle = 0
 	info.snapPosition = nil
 
-	-- Moving up fast enough (jump, ramp launch)? Never ground - this is the rule
-	-- that makes ramp boosting work: snapping here would steal the launch.
-	if velocity.Y > profile.RampBoostThreshold then
+	local tr = traceFn(position, Vector3.new(0, -profile.GroundSnapDistance, 0))
+	if not tr.hit then
 		return info
 	end
 
-	local tr = traceFn(position, Vector3.new(0, -profile.GroundSnapDistance, 0))
-	if not tr.hit then
+	-- Ramp-launch rule (Q3 PM_GroundTrace / Source CategorizePosition): refuse
+	-- ground only when moving AWAY from the surface fast enough. Raw upward
+	-- speed alone must NOT unground you - running up a walkable ramp gives a
+	-- large velocity.Y that is TANGENT to the plane, and snapping out there
+	-- would flicker the ascent airborne and bleed momentum. dot(velocity,
+	-- normal) isolates the true separation speed, which both preserves ramp
+	-- launches (leaving the lip) and keeps uphill sprints grounded.
+	if velocity.Y > profile.RampBoostThreshold and velocity:Dot(tr.normal) > profile.RampBoostThreshold then
 		return info
 	end
 

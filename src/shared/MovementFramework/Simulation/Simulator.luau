@@ -14,8 +14,11 @@
 local Types = require(script.Parent.Parent.Core.Types)
 local VectorMath = require(script.Parent.Parent.Math.VectorMath)
 local QuakeMath = require(script.Parent.QuakeMath)
+local AirPhysics = require(script.Parent.AirPhysics)
 local SlideMove = require(script.Parent.SlideMove)
 local GroundTracer = require(script.Parent.GroundTracer)
+local WallRun = require(script.Parent.WallRun)
+local LadderMove = require(script.Parent.LadderMove)
 local StateMachine = require(script.Parent.StateMachine)
 local MovementConfig = require(script.Parent.Parent.Config.MovementConfig)
 
@@ -27,6 +30,8 @@ export type Simulator = {
 	SetProfile: (self: Simulator, profile: MovementConfig.MovementProfile) -> (),
 	GetProfile: (self: Simulator) -> MovementConfig.MovementProfile,
 	SetTrace: (self: Simulator, trace: Types.TraceFn) -> (),
+	-- Read-only view of the last solve's clip planes (debug visualization).
+	GetLastSlideOutput: (self: Simulator) -> SlideMove.SlideOutput,
 }
 
 type SimulatorInternal = Simulator & {
@@ -48,6 +53,10 @@ end
 
 function Simulator.SetTrace(self: SimulatorInternal, trace: Types.TraceFn)
 	self._trace = trace
+end
+
+function Simulator.GetLastSlideOutput(self: SimulatorInternal): SlideMove.SlideOutput
+	return self._slideOut
 end
 
 local function hasButton(cmd: Types.InputCommand, flag: number): boolean
@@ -113,8 +122,10 @@ local function airMove(
 	state.wishSpeed = wishSpeed
 
 	if wishDir ~= VectorMath.ZERO then
+		-- Strategy dispatch (Quake / Source / CPM) lives in AirPhysics so the
+		-- kernel stays feel-agnostic; the profile alone decides the mode.
 		local newVel, accel =
-			QuakeMath.airAccelerate(state.velocity, wishDir, wishSpeed, p.AirSpeedCap, p.AirAcceleration, dt)
+			AirPhysics.airAccelerate(state.velocity, wishDir, wishSpeed, cmd.moveX, cmd.moveZ, p, dt)
 		state.velocity = newVel
 		state.lastAcceleration = accel
 	else
@@ -133,9 +144,6 @@ local function tryJump(self: SimulatorInternal, state: Types.MoveState): boolean
 	-- Preserve horizontal momentum entirely; only replace vertical (bhop core).
 	-- On upward ramps keep positive Y (additive ramp jump).
 	local vy = math.max(state.velocity.Y, 0) + p.JumpPower
-	-- Classic behaviour: jump velocity is at least JumpPower, ramp adds on top but
-	-- capped to avoid double-dipping the snap-clip.
-	vy = math.min(vy, p.JumpPower + math.max(state.velocity.Y, 0))
 	state.velocity = Vector3.new(state.velocity.X, vy, state.velocity.Z)
 	state.grounded = false
 	state.coyoteTimer = 0
@@ -191,7 +199,13 @@ function Simulator.Step(self: SimulatorInternal, state: Types.MoveState, cmd: Ty
 		if hSpeed > p.GroundSpeed * 0.9 and state.prevStateId ~= MoveStates.Sliding then
 			state.slideTimer = p.SlideMaxTime
 			local flat = VectorMath.safeUnit(VectorMath.flatten(state.velocity))
-			state.velocity = VectorMath.withY(flat * hSpeed * p.SlideMultiplier, state.velocity.Y)
+			-- The boost is capped at sprint*multiplier and never stacks: each
+			-- re-press used to multiply current speed, letting key-pumping
+			-- compound to MaxVelocity. Above the cap the slide keeps (never
+			-- gains) speed, preserving momentum runs without the exploit.
+			local cap = p.GroundSpeed * p.SprintMultiplier * p.SlideMultiplier
+			local boosted = math.min(hSpeed * p.SlideMultiplier, math.max(cap, hSpeed))
+			state.velocity = VectorMath.withY(flat * boosted, state.velocity.Y)
 		end
 	end
 	local sliding = state.slideTimer > 0
@@ -218,8 +232,20 @@ function Simulator.Step(self: SimulatorInternal, state: Types.MoveState, cmd: Ty
 		state.surfaceAngle = ground.angle
 	end
 
-	-- 6. Accelerate
-	if state.grounded and not state.jumpedThisTick then
+	-- 6. Accelerate. Dispatch priority: ladder > wall run > ground > air.
+	-- Each solver fully owns its tick (velocity in, velocity out); the kernel
+	-- only routes, so adding a movement mode never touches the math below.
+	local laddered = false
+	if p.LadderEnabled then
+		laddered = LadderMove.step(trace, state, cmd, wishDir, p, dt)
+	end
+	local wallRunning = false
+	if not laddered and not state.onLadder and not state.grounded and p.WallRunEnabled then
+		wallRunning = WallRun.step(trace, state, cmd.moveZ > 0, p, dt)
+	end
+	if laddered or wallRunning then
+		-- Velocity fully resolved by the dedicated solver this tick.
+	elseif state.grounded and not state.jumpedThisTick then
 		groundMove(self, state, cmd, wishDir, sprinting, sliding)
 	else
 		airMove(self, state, cmd, wishDir, surfing)
@@ -228,6 +254,7 @@ function Simulator.Step(self: SimulatorInternal, state: Types.MoveState, cmd: Ty
 	state.velocity = QuakeMath.clampVelocity(state.velocity, p.MaxVelocity)
 
 	-- 7. Solve movement against the world
+	local impactVelY = state.velocity.Y -- impact speed BEFORE the solver clips it
 	local out = self._slideOut
 	SlideMove.stepSlide(
 		trace,
@@ -254,12 +281,19 @@ function Simulator.Step(self: SimulatorInternal, state: Types.MoveState, cmd: Ty
 
 	if state.grounded then
 		state.coyoteTimer = p.CoyoteTime
+		-- Ground contact refills the wall-run budget and clears attachment -
+		-- the resource model that stops infinite corridor climbing.
+		state.wallRunTimer = p.WallRunMaxTime
+		state.wallRunSide = 0
 		if ground.snapPosition and preLandVelY <= 0 then
 			state.position = ground.snapPosition :: Vector3
 		end
 		if not wasGrounded then
 			state.landedThisTick = true
-			state.landingSpeed = math.max(-preLandVelY, 0)
+			-- Use the PRE-solve vertical speed: the slide solver has already
+			-- clipped velocity against the floor plane by now, so the
+			-- post-solve value would always read ~0 and mute landing effects.
+			state.landingSpeed = math.max(-impactVelY, 0)
 			state.landingTimer = p.LandingRecoveryTime
 			-- Kill downward velocity into the plane; keep the tangential part
 			-- (momentum preservation on landing - critical for bhop chains).

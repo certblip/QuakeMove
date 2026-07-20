@@ -30,7 +30,10 @@ function ICameraEffect.Update(self: LandingInternal, ctx: Types.CameraContext, o
 	if state.landedThisTick and state.tick ~= self._lastLandTick then
 		self._lastLandTick = state.tick
 		local dip = math.min(state.landingSpeed * cfg.DipPerSpeed, cfg.MaxDip)
-		self._spring:Impulse(Vector3.new(0, -dip / ctx.dt * 0.016, 0))
+		-- Fixed velocity-per-dip scale: dividing by the RENDER dt made the
+		-- impulse framerate-dependent (4x harder at 240fps than at 60).
+		local IMPULSE_PER_DIP = 62.5 -- studs/s of spring velocity per stud of dip
+		self._spring:Impulse(Vector3.new(0, -dip * IMPULSE_PER_DIP, 0))
 	end
 	self._spring.Stiffness = cfg.Stiffness
 	self._spring.Damping = cfg.Damping

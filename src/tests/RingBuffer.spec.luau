@@ -1,5 +1,7 @@
 --!strict
-local RingBuffer = require(script.Parent.Parent.shared.MovementFramework.Networking.RingBuffer)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RingBuffer =
+	require(ReplicatedStorage:WaitForChild("MovementFramework"):WaitForChild("Networking"):WaitForChild("RingBuffer"))
 
 return function(t: any)
 	t:describe("RingBuffer", function()
@@ -18,6 +20,18 @@ return function(t: any)
 			t:expect(rb:Get(1)):toBe(10)
 			t:expect(rb:Get(2)):toBe(20)
 			t:expect(rb:Get(3)):toBe(nil)
+		end)
+		t:it("Pop drains FIFO and empties", function()
+			local rb = RingBuffer.new(3)
+			rb:Push("a"); rb:Push("b"); rb:Push("c"); rb:Push("d") -- 'a' evicted
+			t:expect(rb:Pop()):toBe("b")
+			t:expect(rb:Pop()):toBe("c")
+			t:expect(rb:Pop()):toBe("d")
+			t:expect(rb:Pop()):toBe(nil)
+			t:expect(rb:Count()):toBe(0)
+			-- Reusable after draining
+			rb:Push("e")
+			t:expect(rb:Pop()):toBe("e")
 		end)
 	end)
 end

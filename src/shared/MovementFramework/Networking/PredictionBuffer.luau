@@ -24,7 +24,8 @@ export type PredictionBuffer = {
 		self: PredictionBuffer,
 		authoritative: Types.MoveState,
 		liveState: Types.MoveState,
-		simulator: Simulator.Simulator
+		simulator: Simulator.Simulator,
+		applyModifiers: ((dt: number) -> ())?
 	) -> number, -- returns prediction error magnitude (0 when within tolerance)
 	GetLastError: (self: PredictionBuffer) -> number,
 	Clear: (self: PredictionBuffer) -> (),
@@ -61,7 +62,8 @@ function PredictionBuffer.Reconcile(
 	self: BufferInternal,
 	authoritative: Types.MoveState,
 	liveState: Types.MoveState,
-	simulator: Simulator.Simulator
+	simulator: Simulator.Simulator,
+	applyModifiers: ((dt: number) -> ())?
 ): number
 	local slot = slotFor(self, authoritative.tick)
 	if not slot.used or slot.state.tick ~= authoritative.tick then
@@ -79,11 +81,16 @@ function PredictionBuffer.Reconcile(
 	local currentTick = liveState.tick
 	MoveState.copyInto(liveState, authoritative)
 
-	-- ...and replay every stored command up to the present.
+	-- ...and replay every stored command up to the present. Modifiers must
+	-- replay too: the live tick ran them, so omitting them here would make
+	-- every reconciliation near a jump pad diverge by exactly one pad impulse.
 	for tick = replayFrom, currentTick do
 		local replay = slotFor(self, tick)
 		if replay.used and replay.cmd.tick == tick then
 			simulator:Step(liveState, replay.cmd)
+			if applyModifiers then
+				applyModifiers(replay.cmd.dt)
+			end
 			MoveState.copyInto(replay.state, liveState) -- re-record corrected history
 		end
 	end

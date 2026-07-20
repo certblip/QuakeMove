@@ -28,8 +28,9 @@ function ICameraEffect.Update(self: SwayInternal, ctx: Types.CameraContext, out:
 	local accel = (vel - self._prevVel)
 	self._prevVel = vel
 
+	-- True right vector: forward x up = (-z, 0, x). See TiltEffect note.
 	local look = ctx.lookVector
-	local right = Vector3.new(look.Z, 0, -look.X)
+	local right = Vector3.new(-look.Z, 0, look.X)
 	local target = right * (-accel:Dot(right) * cfg.VelocityScale)
 		+ Vector3.new(0, -accel.Y * cfg.VelocityScale * 0.5, 0)
 

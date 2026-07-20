@@ -18,6 +18,7 @@ export type TiltConfig = {
 	Enabled: boolean,
 	StrafeTilt: number, -- radians of roll at full strafe input
 	VelocityTilt: number, -- extra roll from lateral velocity (rad per stud/s)
+	WallRunTilt: number, -- radians of roll away from the wall while wall-running
 	Responsiveness: number, -- damp lambda
 }
 
@@ -53,6 +54,13 @@ export type SwayConfig = {
 	Responsiveness: number,
 }
 
+export type SlideConfig = {
+	Enabled: boolean,
+	EyeDrop: number, -- studs the eye lowers while sliding (crouch pose)
+	Roll: number, -- radians of camera roll while sliding
+	Responsiveness: number, -- damp lambda for enter/exit blending
+}
+
 export type CameraProfile = {
 	HeadBob: HeadBobConfig,
 	Tilt: TiltConfig,
@@ -60,6 +68,7 @@ export type CameraProfile = {
 	Landing: LandingConfig,
 	Shake: ShakeConfig,
 	Sway: SwayConfig,
+	Slide: SlideConfig,
 }
 
 local Default: CameraProfile = {
@@ -75,6 +84,7 @@ local Default: CameraProfile = {
 		Enabled = true,
 		StrafeTilt = math.rad(1.6),
 		VelocityTilt = math.rad(0.035),
+		WallRunTilt = math.rad(10),
 		Responsiveness = 12,
 	},
 	FOV = {
@@ -104,6 +114,12 @@ local Default: CameraProfile = {
 		VelocityScale = 0.004,
 		MaxSway = 0.28,
 		Responsiveness = 8,
+	},
+	Slide = {
+		Enabled = true,
+		EyeDrop = 1.1, -- ~half of the default 2.1 EyeHeight: reads as a crouch
+		Roll = math.rad(2.2),
+		Responsiveness = 10,
 	},
 }
 

@@ -9,6 +9,7 @@
 
 export type RingBuffer<T> = {
 	Push: (self: RingBuffer<T>, value: T) -> T?, -- returns evicted slot for reuse
+	Pop: (self: RingBuffer<T>) -> T?, -- removes and returns the oldest entry
 	Get: (self: RingBuffer<T>, index: number) -> T?, -- 1 = oldest
 	Newest: (self: RingBuffer<T>) -> T?,
 	Count: (self: RingBuffer<T>) -> number,
@@ -40,6 +41,21 @@ function RingBuffer.Push<T>(self: RingInternal<T>, value: T): T?
 		self._head = 1
 	end
 	return evicted
+end
+
+-- FIFO removal; the slot is handed back to the caller for pooling (the queue
+-- consumer recycles command tables instead of allocating).
+function RingBuffer.Pop<T>(self: RingInternal<T>): T?
+	if self._count == 0 then
+		return nil
+	end
+	local oldest = self._head - self._count
+	if oldest < 1 then
+		oldest += self._capacity
+	end
+	local value = self._items[oldest]
+	self._count -= 1
+	return value
 end
 
 function RingBuffer.Get<T>(self: RingInternal<T>, index: number): T?

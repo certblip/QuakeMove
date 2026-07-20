@@ -1,5 +1,6 @@
 --!strict
-local VectorMath = require(script.Parent.Parent.shared.MovementFramework.Math.VectorMath)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VectorMath = require(ReplicatedStorage:WaitForChild("MovementFramework"):WaitForChild("Math"):WaitForChild("VectorMath"))
 
 return function(t: any)
 	t:describe("VectorMath.clipVelocity", function()

@@ -24,6 +24,10 @@ local CameraService = require(StarterPlayerScripts:WaitForChild("CameraService")
 local CharacterAdapter = require(StarterPlayerScripts:WaitForChild("CharacterAdapter"))
 local DebugOverlay = require(StarterPlayerScripts:WaitForChild("DebugOverlay"))
 local MovementController = require(StarterPlayerScripts:WaitForChild("MovementController"))
+local ViewmodelService = require(StarterPlayerScripts:WaitForChild("ViewmodelService"))
+local HUDService = require(StarterPlayerScripts:WaitForChild("HUDService"))
+local DebugRenderer = require(StarterPlayerScripts:WaitForChild("DebugRenderer"))
+local ReplayService = require(StarterPlayerScripts:WaitForChild("ReplayService"))
 local Transport = require(ReplicatedStorage.MovementFramework.Networking.Transport)
 
 -- 1. Framework instance + chosen profiles.
@@ -40,10 +44,15 @@ local transport = Transport.newClient()
 
 -- 3. Services.
 local inputService = InputService.new(fw:GetInputProfile())
-local cameraService = CameraService.new(fw:GetCameraProfile(), fw:GetInputProfile().MouseSensitivity)
+local cameraService =
+	CameraService.new(fw:GetCameraProfile(), fw:GetInputProfile().MouseSensitivity, fw:GetInputProfile().GamepadLookSensitivity)
 local characterAdapter = CharacterAdapter.new()
 local debugOverlay = DebugOverlay.new(false)
 local controller = MovementController.new(fw, transport)
+local viewmodel = ViewmodelService.new(fw)
+local hud = HUDService.new(fw)
+local debugRenderer = DebugRenderer.new(fw)
+local replayService = ReplayService.new(fw)
 
 -- 4. Register (registry resolves ordering via declared Dependencies).
 fw:RegisterService(inputService)
@@ -51,6 +60,10 @@ fw:RegisterService(cameraService)
 fw:RegisterService(characterAdapter)
 fw:RegisterService(debugOverlay)
 fw:RegisterService(controller)
+fw:RegisterService(viewmodel)
+fw:RegisterService(hud)
+fw:RegisterService(debugRenderer)
+fw:RegisterService(replayService)
 
 -- 5. Go.
 fw:Start()

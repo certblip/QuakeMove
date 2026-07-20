@@ -33,6 +33,8 @@ type AdapterInternal = CharacterAdapter & {
 	_humanoid: Humanoid?,
 	_character: Model?,
 	_hideConn: RBXScriptConnection?,
+	_hiddenParts: { BasePart },
+	_hiddenDecals: { Decal },
 	_prevPos: Vector3,
 	_currPos: Vector3,
 	_correction: Vector3,
@@ -63,16 +65,21 @@ local DISABLED_STATES: { Enum.HumanoidStateType } = {
 
 -- First-person: hide the local character (head, hair, accessories, body)
 -- without touching replication. LocalTransparencyModifier is a client-only
--- visual override - other players still see the character normally. The
--- default Roblox transparency controller only does this for its own camera;
--- with a Scriptable camera we must do it ourselves.
-local function hideLocally(inst: Instance)
+-- visual override - other players still see the character normally.
+-- The hidden instances are CACHED so Render can re-assert the value every
+-- frame: after a respawn the engine can flip the camera back to Custom for a
+-- few frames, which reactivates the default PlayerModule whose
+-- TransparencyController writes 0 back. Our PreRender write runs after the
+-- core scripts' BindToRenderStep, so re-asserting always wins the frame.
+local function hideLocally(self: AdapterInternal, inst: Instance)
 	-- Branches keep each write on a single narrowed type (union property
 	-- writes do not typecheck). Texture inherits Decal, so two checks suffice.
 	if inst:IsA("BasePart") then
 		inst.LocalTransparencyModifier = 1
+		table.insert(self._hiddenParts, inst)
 	elseif inst:IsA("Decal") then
 		inst.LocalTransparencyModifier = 1
+		table.insert(self._hiddenDecals, inst)
 	end
 end
 
@@ -85,13 +92,17 @@ function CharacterAdapter.Bind(self: AdapterInternal, character: Model)
 		self._hideConn:Disconnect()
 		self._hideConn = nil
 	end
+	table.clear(self._hiddenParts)
+	table.clear(self._hiddenDecals)
 
 	-- Hide everything already present, then keep hiding late arrivals -
 	-- accessories/hair replicate in asynchronously after CharacterAdded.
 	for _, inst in character:GetDescendants() do
-		hideLocally(inst)
+		hideLocally(self, inst)
 	end
-	self._hideConn = character.DescendantAdded:Connect(hideLocally)
+	self._hideConn = character.DescendantAdded:Connect(function(inst: Instance)
+		hideLocally(self, inst)
+	end)
 	self._character = character
 
 	-- Humanoid becomes a container: no state machine, no auto-physics.
@@ -117,16 +128,14 @@ function CharacterAdapter.Unbind(self: AdapterInternal)
 	end
 	-- Restore local visibility (e.g. when the framework is disabled/destroyed
 	-- and the default third-person camera takes back over).
-	local character = self._character
-	if character then
-		for _, inst in character:GetDescendants() do
-			if inst:IsA("BasePart") then
-				inst.LocalTransparencyModifier = 0
-			elseif inst:IsA("Decal") then
-				inst.LocalTransparencyModifier = 0
-			end
-		end
+	for _, part in self._hiddenParts do
+		part.LocalTransparencyModifier = 0
 	end
+	for _, decal in self._hiddenDecals do
+		decal.LocalTransparencyModifier = 0
+	end
+	table.clear(self._hiddenParts)
+	table.clear(self._hiddenDecals)
 	self._character = nil
 	local root = self._root
 	if root then
@@ -152,6 +161,17 @@ function CharacterAdapter.Render(self: AdapterInternal, dt: number, alpha: numbe
 	if not root then
 		return
 	end
+	-- Re-assert first-person hiding every frame (see hideLocally note): the
+	-- default TransparencyController can briefly reactivate after respawn and
+	-- write 0 back; ~20 property writes per frame is effectively free.
+	local parts = self._hiddenParts
+	for i = 1, #parts do
+		parts[i].LocalTransparencyModifier = 1
+	end
+	local decals = self._hiddenDecals
+	for i = 1, #decals do
+		decals[i].LocalTransparencyModifier = 1
+	end
 	self._correction = self._correction:Lerp(Vector3.zero, 1 - math.exp(-self._correctionLambda * dt))
 	local pos = self._prevPos:Lerp(self._currPos, alpha) + self._correction
 	root.CFrame = CFrame.new(pos) * CFrame.Angles(0, yaw, 0)
@@ -175,6 +195,8 @@ local function new(): CharacterAdapter
 		_humanoid = nil,
 		_character = nil,
 		_hideConn = nil,
+		_hiddenParts = {},
+		_hiddenDecals = {},
 		_prevPos = Vector3.zero,
 		_currPos = Vector3.zero,
 		_correction = Vector3.zero,
