@@ -1,4 +1,5 @@
 --!strict
+-- teterboro3/tiikik4rgfwesgreg
 --[[
 	MovementController.luau
 	Purpose: Client orchestrator. Owns the per-tick pipeline wiring described in the
