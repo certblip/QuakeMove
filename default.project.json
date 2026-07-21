@@ -35,6 +35,8 @@
         "HUDService":          { "$path": "src/client/HUDService.luau" },
         "DebugRenderer":       { "$path": "src/client/DebugRenderer.luau" },
         "ReplayService":       { "$path": "src/client/ReplayService.luau" },
+        "RemotePlayersService": { "$path": "src/client/RemotePlayersService.luau" },
+        "ReplayDiagnostics":   { "$path": "src/client/ReplayDiagnostics.client.luau" },
         "CameraEffects":       { "$path": "src/client/CameraEffects" },
         "ClientBootstrap":     { "$path": "src/client/ClientBootstrap.client.luau" }
       }
