@@ -72,7 +72,7 @@ type ControllerInternal = MovementController & {
 	-- Newest server-time stamp from a snapshot tail; echoed back in the input
 	-- packet header so the SERVER can measure this player's RTT for lag comp.
 	_serverStampEcho: number,
-	-- Feet-relative eye heights (check Start): damped for smooth crouch dips.
+	-- Feet-relative eye heights (см. Start): damped for smooth crouch dips.
 	_eyeAboveFeet: number,
 	_eyeStand: number,
 	_eyeCrouch: number,
